@@ -44,12 +44,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yourusername/signalk-mcp-server.git"
+    "url": "git+https://github.com/tonybentley/signalk-mcp-server.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/signalk-mcp-server/issues"
+    "url": "https://github.com/tonybentley/signalk-mcp-server/issues"
   },
-  "homepage": "https://github.com/yourusername/signalk-mcp-server#readme",
+  "homepage": "https://github.com/tonybentley/signalk-mcp-server#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.5.0",
     "@signalk/client": "^2.3.0",
