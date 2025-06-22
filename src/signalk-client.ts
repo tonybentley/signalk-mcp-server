@@ -248,22 +248,17 @@ export class SignalKClient extends EventEmitter {
 
 
   getVesselState(): VesselState {
-    const navigationPaths = [
-      'navigation.position',
-      'navigation.courseOverGroundTrue',
-      'navigation.speedOverGround',
-      'navigation.headingTrue',
-      'environment.wind.speedApparent',
-      'environment.wind.angleApparent'
-    ];
-
     const state: any = {};
-    navigationPaths.forEach(path => {
-      const fullPath = `${this.context}.${path}`;
-      if (this.latestValues.has(fullPath)) {
-        state[path] = this.latestValues.get(fullPath);
+    
+    // Dynamically get all available paths for this vessel context
+    for (const [fullPath, signalKValue] of this.latestValues.entries()) {
+      // Only include paths for the current vessel context
+      if (fullPath.startsWith(this.context + '.')) {
+        // Extract the path without the context prefix
+        const path = fullPath.substring(this.context.length + 1);
+        state[path] = signalKValue;
       }
-    });
+    }
 
     return {
       connected: this.connected,

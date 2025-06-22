@@ -270,6 +270,37 @@ describe('SignalKClient', () => {
       expect(state.data['navigation.position'].value).toEqual({ latitude: 37.8199, longitude: -122.4783 });
     });
 
+    test('should return vessel state dynamically based on available paths', () => {
+      // Add additional paths to test dynamic behavior
+      client.latestValues.set('vessels.self.navigation.speedOverGround', {
+        value: 5.2,
+        timestamp: '2025-06-21T10:00:00.000Z',
+        source: { label: 'GPS1', type: 'NMEA0183' }
+      });
+      
+      client.latestValues.set('vessels.self.environment.wind.speedApparent', {
+        value: 10.5,
+        timestamp: '2025-06-21T10:00:00.000Z',
+        source: { label: 'Wind1', type: 'NMEA0183' }
+      });
+      
+      const state = client.getVesselState();
+      
+      // Should include all available paths for the vessel context
+      expect(state.data['navigation.position']).toBeDefined();
+      expect(state.data['navigation.speedOverGround']).toBeDefined();
+      expect(state.data['environment.wind.speedApparent']).toBeDefined();
+      
+      // Should not include paths from other vessel contexts
+      client.latestValues.set('vessels.other.navigation.position', {
+        value: { latitude: 1, longitude: 1 },
+        timestamp: '2025-06-21T10:00:00.000Z'
+      });
+      
+      const stateAfter = client.getVesselState();
+      expect(stateAfter.data['vessels.other.navigation.position']).toBeUndefined();
+    });
+
     test('should return AIS targets correctly', () => {
       const targets = client.getAISTargets();
       
