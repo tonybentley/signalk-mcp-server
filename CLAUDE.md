@@ -133,10 +133,135 @@ src/resource-handler.js      # MCP resource management and delta processing
 - Simple deployment and configuration
 
 ## Development Commands
-- Add common development commands here (build, test, lint, etc.)
+
+### Build & Type Checking
+```bash
+npm run build          # Compile TypeScript to JavaScript
+npm run typecheck      # Type check without emitting files
+```
+
+### Testing Strategy
+```bash
+# Unit Tests (Fast - ~2s)
+npm run test:unit      # Run all unit tests
+npm run test:watch     # Run unit tests in watch mode
+npm run test:coverage  # Run unit tests with coverage report
+
+# Integration Tests (Slow - ~30s each, requires live SignalK server)
+npm run test:e2e       # Run all integration tests
+npm run test:watch:e2e # Run integration tests in watch mode
+
+# Individual Integration Tests (for focused testing)
+npx jest tests/signalk-client-vessel-state.e2e.spec.ts      # Test getVesselState()
+npx jest tests/signalk-client-ais-targets.e2e.spec.ts       # Test getAISTargets()
+npx jest tests/signalk-client-available-paths.e2e.spec.ts   # Test listAvailablePaths()
+
+# All Tests
+npm run test:all       # Run both unit and integration tests
+```
+
+### Core Client Method Validation
+**IMPORTANT**: When modifying core SignalKClient methods, always run:
+
+1. **Unit Tests First** (fast validation - efficient feedback loop):
+   ```bash
+   # All unit tests
+   npm run test:unit
+   
+   # Individual unit test suites for ultra-fast feedback
+   npx jest src/signalk-client.spec.ts -t "Configuration"
+   npx jest src/signalk-client.spec.ts -t "URL Building" 
+   npx jest src/signalk-client.spec.ts -t "Delta Message Processing"
+   npx jest src/signalk-client.spec.ts -t "Data Retrieval Methods"
+   npx jest src/signalk-client.spec.ts -t "HTTP Methods"
+   npx jest src/signalk-client.spec.ts -t "Connection Management"
+   npx jest src/signalk-client.spec.ts -t "Event Handling"
+   npx jest src/signalk-client.spec.ts -t "Edge Cases and Error Handling"
+   npx jest src/signalk-client.spec.ts -t "Data Formatting and Validation"
+   
+   # Watch mode for continuous feedback during development
+   npx jest src/signalk-client.spec.ts --watch
+   ```
+
+2. **Specific Integration Test** (validates against live server):
+   ```bash
+   # For getVesselState() changes:
+   npx jest tests/signalk-client-vessel-state.e2e.spec.ts
+   
+   # For getAISTargets() changes:
+   npx jest tests/signalk-client-ais-targets.e2e.spec.ts
+   
+   # For listAvailablePaths() changes:
+   npx jest tests/signalk-client-available-paths.e2e.spec.ts
+   ```
+
+3. **Type Check**:
+   ```bash
+   npm run typecheck
+   ```
+
+### Development Server
+```bash
+npm run dev            # Development server with hot reload
+npm run start:dev      # Development server (alternative)
+npm run start:prod     # Production server
+```
 
 ## Project Structure
-- Document key directories and their purposes
+
+```
+src/
+├── signalk-client.ts           # Core SignalK WebSocket client
+├── signalk-mcp-server.ts       # MCP server implementation
+├── types/                      # TypeScript type definitions
+└── index.ts                    # Main entry point
+
+tests/
+├── setup.ts                    # Jest test configuration
+├── *.spec.ts                   # Unit tests
+└── *.e2e.spec.ts              # Integration tests (live server)
+
+dist/                           # Compiled JavaScript output
+```
+
+## Testing Philosophy
+
+### Unit Tests (`*.spec.ts`)
+- Fast execution (~2 seconds total)
+- Mock external dependencies
+- Test business logic and edge cases
+- 80+ tests covering all core functionality
+- Always run before commits
+
+### Integration Tests (`*.e2e.spec.ts`)  
+- Test against live SignalK server
+- Validate real marine data handling
+- Test HTTP/WebSocket fallback behavior
+- Verify AI-ready data formatting
+- Run for major changes or releases
+
+### Core Method Coverage
+- `getVesselState()`: Dynamic vessel data retrieval
+- `getAISTargets()`: True AIS target detection (MMSI-based)
+- `listAvailablePaths()`: HTTP API with WebSocket fallback
+- `getActiveAlarms()`: System notifications and alerts
+- `getPathValue()`: Individual path data fetching
+- `getConnectionStatus()`: Connection health monitoring
 
 ## Notes
-- Add any project-specific notes or conventions here
+
+### AIS Target Implementation
+- Only vessels with MMSI format (`urn:mrn:imo:mmsi:XXXXXXXXX`) are AIS targets
+- UUID-based vessels and WiFi connections are excluded
+- Follows SignalK 1.7.0 specification for proper maritime safety compliance
+
+### Testing Requirements
+- Live SignalK server required for integration tests
+- Server credentials: admin/adminadmin
+- Tests validate real marine data structures
+- AI-ready JSON format validation included
+
+### Error Handling
+- Integration tests fail fast if no live server connection
+- Graceful fallback from HTTP to WebSocket for path discovery
+- Comprehensive edge case testing in unit tests

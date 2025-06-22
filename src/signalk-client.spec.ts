@@ -188,7 +188,7 @@ describe('SignalKClient', () => {
       expect(client.aisTargets.has('urn:mrn:imo:mmsi:123456789')).toBe(true);
       
       const target = client.aisTargets.get('urn:mrn:imo:mmsi:123456789');
-      expect(target?.mmsi).toBe('urn:mrn:imo:mmsi:123456789');
+      expect(target?.mmsi).toBe('123456789'); // Now stores just the MMSI number
       expect(target?.['navigation.position']).toEqual({ latitude: 37.8299, longitude: -122.4683 });
     });
 
@@ -212,7 +212,7 @@ describe('SignalKClient', () => {
       expect(alarm?.message).toBe('Engine temperature high');
     });
 
-    test('should clear alarms when state becomes normal', () => {
+    test('should keep alarms when state becomes normal (for audit trail)', () => {
       // First set an alarm
       const alertDelta = global.testUtils.createSampleDelta(
         'vessels.self',
@@ -222,8 +222,10 @@ describe('SignalKClient', () => {
       client.handleDelta(alertDelta);
       
       expect(client.activeAlarms.has('notifications.engine.overTemperature')).toBe(true);
+      const alertAlarm = client.activeAlarms.get('notifications.engine.overTemperature');
+      expect(alertAlarm?.state).toBe('alert');
       
-      // Then clear it
+      // Then set to normal state
       const normalDelta = global.testUtils.createSampleDelta(
         'vessels.self',
         'notifications.engine.overTemperature',
@@ -231,7 +233,40 @@ describe('SignalKClient', () => {
       );
       client.handleDelta(normalDelta);
       
-      expect(client.activeAlarms.has('notifications.engine.overTemperature')).toBe(false);
+      // Alarm should still exist but with normal state
+      expect(client.activeAlarms.has('notifications.engine.overTemperature')).toBe(true);
+      const normalAlarm = client.activeAlarms.get('notifications.engine.overTemperature');
+      expect(normalAlarm?.state).toBe('normal');
+      expect(normalAlarm?.message).toBe('Engine temperature normal');
+    });
+
+    test('should delete alarms only when value is null/undefined', () => {
+      // First set an alarm
+      const alertDelta = global.testUtils.createSampleDelta(
+        'vessels.self',
+        'notifications.test.alarm',
+        { state: 'alert', message: 'Test alarm' }
+      );
+      client.handleDelta(alertDelta);
+      
+      expect(client.activeAlarms.has('notifications.test.alarm')).toBe(true);
+      
+      // Delete the alarm by setting value to null
+      const deleteDelta = {
+        context: 'vessels.self',
+        updates: [{
+          timestamp: new Date().toISOString(),
+          source: { label: 'Test', type: 'test' },
+          values: [{
+            path: 'notifications.test.alarm',
+            value: null
+          }]
+        }]
+      };
+      client.handleDelta(deleteDelta);
+      
+      // Alarm should be deleted
+      expect(client.activeAlarms.has('notifications.test.alarm')).toBe(false);
     });
   });
 
@@ -600,7 +635,7 @@ describe('SignalKClient', () => {
       expect(alarm?.timestamp).toBeDefined(); // Should use delta timestamp
     });
 
-    test('should handle AIS data with missing MMSI', () => {
+    test('should filter out non-MMSI vessel contexts', () => {
       const delta = {
         context: 'vessels.unknown.context',
         updates: [{
@@ -615,7 +650,8 @@ describe('SignalKClient', () => {
       
       client.handleDelta(delta);
       
-      expect(client.aisTargets.has('unknown.context')).toBe(true);
+      // Should NOT create AIS target for non-MMSI vessel context
+      expect(client.aisTargets.has('unknown.context')).toBe(false);
     });
 
     test('should handle getPathValue with empty path', async () => {
