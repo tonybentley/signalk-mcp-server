@@ -1,5 +1,5 @@
 {
-  "name": "signalk-mcp-server",
+  "name": "@tonybentley/signalk-mcp-server",
   "version": "1.0.0",
   "description": "MCP server for SignalK marine data integration",
   "main": "dist/src/index.js",
