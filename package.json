@@ -26,7 +26,9 @@
     "test:watch:unit": "jest --watch --testPathPatterns=\\.spec\\.ts$ --testPathIgnorePatterns=\\.e2e\\.",
     "test:watch:e2e": "jest --watch --testPathPatterns=\\.e2e\\.spec\\.ts$",
     "test:coverage": "jest --coverage --testPathPatterns=\\.spec\\.ts$ --testPathIgnorePatterns=\\.e2e\\.",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "ci": "npm run typecheck && npm run build && npm run test:unit && npm run test:coverage",
+    "ci:full": "npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e"
   },
   "keywords": [
     "signalk",

@@ -207,6 +207,12 @@ npm run start:dev      # Development server (alternative)
 npm run start:prod     # Production server
 ```
 
+### CI/CD Pipeline
+```bash
+npm run ci             # Full CI pipeline: typecheck → build → unit tests → coverage
+npm run ci:full        # Extended CI: typecheck → build → all tests → coverage
+```
+
 ## Project Structure
 
 ```

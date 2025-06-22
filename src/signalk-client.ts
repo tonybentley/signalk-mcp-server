@@ -174,6 +174,7 @@ export class SignalKClient extends EventEmitter {
    * - Prevents duplicate connections if already connected
    * - Automatic error handling and cleanup
    * - Subscribes to all vessel data paths upon connection
+   * - Fetches initial complete vessel state via HTTP after connection
    * 
    * @returns Promise that resolves when connected or rejects on error/timeout
    * 
@@ -197,8 +198,17 @@ export class SignalKClient extends EventEmitter {
         reject(new Error('Connection timeout'));
       }, 10000);
 
-      this.client.once('connect', () => {
+      this.client.once('connect', async () => {
         clearTimeout(timeout);
+        
+        // Fetch initial vessel state to populate cache immediately
+        try {
+          await this.fetchInitialVesselState();
+        } catch (error) {
+          console.error('Failed to fetch initial vessel state:', error);
+          // Don't fail connection if HTTP fetch fails - WebSocket deltas will populate data
+        }
+        
         resolve();
       });
 
@@ -209,6 +219,92 @@ export class SignalKClient extends EventEmitter {
 
       this.client.connect();
     });
+  }
+
+  /**
+   * Fetches initial complete vessel state via HTTP API to populate cache immediately
+   * 
+   * This method is called after WebSocket connection to ensure getVesselState()
+   * has immediate access to complete vessel data instead of waiting for deltas.
+   * 
+   * Features:
+   * - HTTP GET to /signalk/v1/api/vessels/self for complete state
+   * - Populates latestValues Map with all available paths
+   * - Preserves current timestamp for each value
+   * - Updates availablePaths Set automatically
+   * - Graceful error handling - logs errors but doesn't throw
+   * 
+   * @returns Promise that resolves when initial state is fetched and cached
+   * 
+   * @private
+   */
+  private async fetchInitialVesselState(): Promise<void> {
+    try {
+      const apiUrl = this.buildRestApiUrl('self');
+      const response = await fetch(apiUrl);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      // Recursively populate latestValues Map from the HTTP response
+      this.populateLatestValuesFromData(data, this.context);
+      
+    } catch (error: any) {
+      console.error('Failed to fetch initial vessel state via HTTP:', error.message);
+      throw error; // Re-throw to be caught in connect() method
+    }
+  }
+
+  /**
+   * Recursively populates latestValues Map from SignalK API response data
+   * 
+   * This helper method traverses the nested SignalK data structure and
+   * extracts all value objects, storing them in the latestValues Map
+   * with proper full path keys (context.path).
+   * 
+   * @param obj - The SignalK data object to traverse
+   * @param context - The vessel context (e.g., 'vessels.self')
+   * @param pathPrefix - Current path prefix being built
+   * 
+   * @private
+   */
+  private populateLatestValuesFromData(obj: any, context: string, pathPrefix = ''): void {
+    if (!obj || typeof obj !== 'object') {
+      return;
+    }
+    
+    for (const [key, value] of Object.entries(obj)) {
+      // Skip metadata fields and null/undefined keys
+      if (!key || key.startsWith('$') || key === 'meta' || key === 'timestamp') {
+        continue;
+      }
+      
+      const currentPath = pathPrefix ? `${pathPrefix}.${key}` : key;
+      
+      // If this object has a 'value' property, it's a SignalK data point
+      if (value && typeof value === 'object' && 'value' in value) {
+        const fullPath = `${context}.${currentPath}`;
+        
+        // Store in latestValues Map with SignalK structure
+        this.latestValues.set(fullPath, {
+          value: (value as any).value,
+          timestamp: (value as any).timestamp || new Date().toISOString(),
+          source: (value as any).source
+        });
+        
+        // Add to available paths (only if currentPath is valid)
+        if (currentPath && currentPath !== 'undefined') {
+          this.availablePaths.add(currentPath);
+        }
+      }
+      // If it's an object without 'value', recurse deeper
+      else if (value && typeof value === 'object' && !Array.isArray(value)) {
+        this.populateLatestValuesFromData(value, context, currentPath);
+      }
+    }
   }
 
   /**
@@ -424,14 +520,18 @@ export class SignalKClient extends EventEmitter {
     const state: any = {};
     
     // Dynamically get all available paths for this vessel context
-    for (const [fullPath, signalKValue] of this.latestValues.entries()) {
+    Array.from(this.latestValues.entries()).forEach(([fullPath, signalKValue]) => {
       // Only include paths for the current vessel context
       if (fullPath.startsWith(this.context + '.')) {
         // Extract the path without the context prefix
         const path = fullPath.substring(this.context.length + 1);
-        state[path] = signalKValue;
+        
+        // Safety check: ensure path is valid
+        if (path && path !== 'undefined' && typeof path === 'string') {
+          state[path] = signalKValue;
+        }
       }
-    }
+    });
 
     return {
       connected: this.connected,

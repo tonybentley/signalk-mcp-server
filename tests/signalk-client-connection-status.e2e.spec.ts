@@ -246,7 +246,7 @@ describe('SignalK Client getConnectionStatus - Live Integration', () => {
     } catch (error) {
       // Reconnection may fail in test environment - that's acceptable
       console.log(`Connection lifecycle: Connected→Disconnected→(Reconnect failed in test environment)`);
-      console.warn('Reconnection failed (acceptable in test environment):', error.message);
+      console.warn('Reconnection failed (acceptable in test environment):', (error as Error).message);
     }
     
     console.log(`Data preserved through disconnect: ${connectedCounts.pathCount} paths, ${connectedCounts.aisTargetCount} AIS, ${connectedCounts.activeAlarmCount} alarms`);

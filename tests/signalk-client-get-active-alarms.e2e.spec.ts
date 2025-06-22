@@ -131,10 +131,10 @@ describe('SignalK Client getActiveAlarms - Live Integration', () => {
         // Timestamp validation
         expect(alarm.timestamp).toBeDefined();
         expect(typeof alarm.timestamp).toBe('string');
-        expect(() => new Date(alarm.timestamp)).not.toThrow();
+        expect(() => new Date(alarm.timestamp!)).not.toThrow();
         
         // Timestamp should be reasonable (depends on alarm state)
-        const alarmAge = Date.now() - new Date(alarm.timestamp).getTime();
+        const alarmAge = Date.now() - new Date(alarm.timestamp!).getTime();
         if (alarm.state === 'normal') {
           // Normal state alarms can be older (historical/resolved alarms)
           expect(Math.abs(alarmAge)).toBeLessThan(86400000); // Within 24 hours either direction
@@ -470,7 +470,7 @@ describe('SignalK Client getActiveAlarms - Live Integration', () => {
     // If alarms exist, validate their freshness
     if (updated.count > 0) {
       for (const alarm of updated.alarms) {
-        const alarmTime = new Date(alarm.timestamp).getTime();
+        const alarmTime = new Date(alarm.timestamp!).getTime();
         const alarmAge = Date.now() - alarmTime;
         
         // Alarm age validation depends on state
@@ -493,7 +493,7 @@ describe('SignalK Client getActiveAlarms - Live Integration', () => {
       const normalAlarms = updated.alarms.filter(alarm => alarm.state === 'normal');
       
       const alarmAges = updated.alarms.map(alarm => {
-        return Date.now() - new Date(alarm.timestamp).getTime();
+        return Date.now() - new Date(alarm.timestamp!).getTime();
       });
       
       const avgAge = alarmAges.reduce((sum, age) => sum + age, 0) / alarmAges.length;
@@ -505,7 +505,7 @@ describe('SignalK Client getActiveAlarms - Live Integration', () => {
       
       // Critical alarms should be relatively fresh
       if (criticalAlarms.length > 0) {
-        const criticalAges = criticalAlarms.map(alarm => Date.now() - new Date(alarm.timestamp).getTime());
+        const criticalAges = criticalAlarms.map(alarm => Date.now() - new Date(alarm.timestamp!).getTime());
         const freshCritical = criticalAges.filter(age => age < 300000); // Less than 5 minutes
         expect(freshCritical.length / criticalAlarms.length).toBeGreaterThan(0.7); // At least 70% of critical should be fresh
       }

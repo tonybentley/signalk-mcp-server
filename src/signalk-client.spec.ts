@@ -791,4 +791,541 @@ describe('SignalKClient', () => {
       expect(typeof result.activeAlarmCount).toBe('number');
     });
   });
+
+  describe('Initial State Fetching', () => {
+    beforeEach(() => {
+      client = new SignalKClient({ hostname: 'test.example.com', port: 3000 });
+      (client as any).client = mockSignalKClient;
+    });
+
+    test('should fetch initial vessel state on connect with HTTP success', async () => {
+      // Mock successful HTTP response
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          navigation: {
+            position: {
+              value: { latitude: 37.8199, longitude: -122.4783 },
+              timestamp: '2023-06-22T10:30:15.000Z'
+            },
+            speedOverGround: {
+              value: 5.2,
+              timestamp: '2023-06-22T10:30:15.100Z'
+            }
+          },
+          environment: {
+            wind: {
+              speedApparent: {
+                value: 8.5,
+                timestamp: '2023-06-22T10:30:15.200Z'
+              }
+            }
+          }
+        })
+      } as Response);
+
+      // Set up connect event to trigger initial fetch
+      let connectHandler: Function | undefined;
+      mockSignalKClient.once.mockImplementation((event: string, handler: Function) => {
+        if (event === 'connect') {
+          connectHandler = handler;
+        }
+      });
+
+      // Start connection
+      const connectPromise = client.connect();
+      
+      // Trigger connect event
+      if (connectHandler) {
+        if (connectHandler) {
+        await connectHandler();
+      }
+      }
+      await connectPromise;
+
+      // Verify data was populated
+      expect(client.latestValues.has('vessels.self.navigation.position')).toBe(true);
+      expect(client.latestValues.has('vessels.self.navigation.speedOverGround')).toBe(true);
+      expect(client.latestValues.has('vessels.self.environment.wind.speedApparent')).toBe(true);
+      
+      const position = client.latestValues.get('vessels.self.navigation.position');
+      expect(position?.value).toEqual({ latitude: 37.8199, longitude: -122.4783 });
+      
+      expect(client.availablePaths.has('navigation.position')).toBe(true);
+      expect(client.availablePaths.has('navigation.speedOverGround')).toBe(true);
+      expect(client.availablePaths.has('environment.wind.speedApparent')).toBe(true);
+    });
+
+    test('should handle HTTP fetch failure during initial state fetch', async () => {
+      // Mock HTTP failure
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+      // Mock console.error to verify error logging
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      // Set up connect event to trigger initial fetch
+      let connectHandler: Function | undefined;
+      mockSignalKClient.once.mockImplementation((event: string, handler: Function) => {
+        if (event === 'connect') {
+          connectHandler = handler;
+        }
+      });
+
+      // Start connection
+      const connectPromise = client.connect();
+      
+      // Trigger connect event
+      if (connectHandler) {
+        await connectHandler();
+      }
+      await connectPromise;
+
+      // Verify error was logged but connection still succeeded (both messages)
+      expect(consoleSpy).toHaveBeenCalledWith('Failed to fetch initial vessel state via HTTP:', 'Network error');
+      expect(consoleSpy).toHaveBeenCalledWith('Failed to fetch initial vessel state:', expect.any(Error));
+      
+      consoleSpy.mockRestore();
+    });
+
+    test('should handle HTTP response that is not ok during initial fetch', async () => {
+      // Mock HTTP failure
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found'
+      } as Response);
+
+      // Mock console.error to verify error logging
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      // Set up connect event to trigger initial fetch
+      let connectHandler: Function | undefined;
+      mockSignalKClient.once.mockImplementation((event: string, handler: Function) => {
+        if (event === 'connect') {
+          connectHandler = handler;
+        }
+      });
+
+      // Start connection
+      const connectPromise = client.connect();
+      
+      // Trigger connect event
+      if (connectHandler) {
+        await connectHandler();
+      }
+      await connectPromise;
+
+      // Verify error was logged (both messages)
+      expect(consoleSpy).toHaveBeenCalledWith('Failed to fetch initial vessel state via HTTP:', 'HTTP 404: Not Found');
+      expect(consoleSpy).toHaveBeenCalledWith('Failed to fetch initial vessel state:', expect.any(Error));
+      
+      consoleSpy.mockRestore();
+    });
+
+    test('should handle complex nested data structures in initial fetch', async () => {
+      // Mock complex nested response
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          electrical: {
+            batteries: {
+              house: {
+                voltage: {
+                  value: 12.6,
+                  timestamp: '2023-06-22T10:30:15.000Z',
+                  source: { label: 'Battery Monitor', type: 'NMEA2000' }
+                },
+                current: {
+                  value: -5.2,
+                  timestamp: '2023-06-22T10:30:15.100Z'
+                }
+              }
+            }
+          },
+          propulsion: {
+            main: {
+              temperature: {
+                value: 356.15,
+                timestamp: '2023-06-22T10:30:15.200Z'
+              }
+            }
+          },
+          $schema: 'should-be-ignored',
+          meta: { ignore: true },
+          timestamp: 'should-be-ignored'
+        })
+      } as Response);
+
+      // Set up connect event
+      let connectHandler: Function | undefined;
+      mockSignalKClient.once.mockImplementation((event: string, handler: Function) => {
+        if (event === 'connect') {
+          connectHandler = handler;
+        }
+      });
+
+      // Start connection
+      const connectPromise = client.connect();
+      if (connectHandler) {
+        await connectHandler();
+      }
+      await connectPromise;
+
+      // Verify nested paths were processed correctly
+      expect(client.latestValues.has('vessels.self.electrical.batteries.house.voltage')).toBe(true);
+      expect(client.latestValues.has('vessels.self.electrical.batteries.house.current')).toBe(true);
+      expect(client.latestValues.has('vessels.self.propulsion.main.temperature')).toBe(true);
+      
+      // Verify metadata was ignored
+      expect(client.latestValues.has('vessels.self.$schema')).toBe(false);
+      expect(client.latestValues.has('vessels.self.meta')).toBe(false);
+      expect(client.latestValues.has('vessels.self.timestamp')).toBe(false);
+      
+      // Verify source information was preserved
+      const voltage = client.latestValues.get('vessels.self.electrical.batteries.house.voltage');
+      expect(voltage?.source?.label).toBe('Battery Monitor');
+      expect(voltage?.source?.type).toBe('NMEA2000');
+    });
+
+    test('should handle null and undefined data during populate', async () => {
+      // Mock response with null/undefined values
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          navigation: {
+            position: null,
+            heading: undefined,
+            speedOverGround: {
+              value: 5.2,
+              timestamp: '2023-06-22T10:30:15.000Z'
+            }
+          }
+        })
+      } as Response);
+
+      // Set up connect event
+      let connectHandler: Function | undefined;
+      mockSignalKClient.once.mockImplementation((event: string, handler: Function) => {
+        if (event === 'connect') {
+          connectHandler = handler;
+        }
+      });
+
+      // Start connection
+      const connectPromise = client.connect();
+      if (connectHandler) {
+        await connectHandler();
+      }
+      await connectPromise;
+
+      // Should only have processed valid value
+      expect(client.latestValues.has('vessels.self.navigation.speedOverGround')).toBe(true);
+      expect(client.latestValues.has('vessels.self.navigation.position')).toBe(false);
+      expect(client.latestValues.has('vessels.self.navigation.heading')).toBe(false);
+    });
+  });
+
+  describe('Console Output and Event Handling', () => {
+    beforeEach(() => {
+      client = new SignalKClient({ hostname: 'test.example.com', port: 3000 });
+      (client as any).client = mockSignalKClient;
+    });
+
+    test('should log connect event to console.error', () => {
+      // Mock console.error to capture output
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      // Get the connect handler
+      const connectHandler = mockSignalKClient.on.mock.calls.find(
+        (call: any) => call[0] === 'connect'
+      )?.[1];
+
+      // Trigger connect event
+      connectHandler();
+
+      // Verify console output
+      expect(consoleSpy).toHaveBeenCalledWith('SignalK client connected');
+      expect(client.connected).toBe(true);
+
+      consoleSpy.mockRestore();
+    });
+
+    test('should log disconnect event to console.error', () => {
+      // Mock console.error to capture output
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      // Set initial connected state
+      client.connected = true;
+
+      // Get the disconnect handler
+      const disconnectHandler = mockSignalKClient.on.mock.calls.find(
+        (call: any) => call[0] === 'disconnect'
+      )?.[1];
+
+      // Trigger disconnect event
+      disconnectHandler();
+
+      // Verify console output
+      expect(consoleSpy).toHaveBeenCalledWith('SignalK client disconnected');
+      expect(client.connected).toBe(false);
+
+      consoleSpy.mockRestore();
+    });
+
+    test('should log error events to console.error', () => {
+      // Mock console.error to capture output
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      // Mock emit to prevent unhandled error
+      const emitSpy = jest.spyOn(client, 'emit').mockImplementation(() => true);
+
+      // Get the error handler
+      const errorHandler = mockSignalKClient.on.mock.calls.find(
+        (call: any) => call[0] === 'error'
+      )?.[1];
+
+      const testError = new Error('Test error');
+
+      // Trigger error event
+      errorHandler(testError);
+
+      // Verify console output
+      expect(consoleSpy).toHaveBeenCalledWith('SignalK client error:', testError);
+      expect(emitSpy).toHaveBeenCalledWith('error', testError);
+
+      consoleSpy.mockRestore();
+      emitSpy.mockRestore();
+    });
+  });
+
+  describe('AIS Target Edge Cases', () => {
+    beforeEach(() => {
+      client = new SignalKClient({ hostname: 'test.example.com', port: 3000 });
+    });
+
+    test('should handle AIS target update with existing target', () => {
+      // Create initial AIS target
+      const vesselContext = 'vessels.urn:mrn:imo:mmsi:123456789';
+      const mmsi = '123456789';
+      const vesselId = 'urn:mrn:imo:mmsi:123456789';
+      
+      // Add initial target
+      client.aisTargets.set(vesselId, {
+        mmsi: mmsi,
+        lastUpdate: '2023-06-22T10:30:00.000Z'
+      });
+
+      // Update with new navigation data
+      client.updateAISTarget(
+        vesselContext,
+        'navigation.position',
+        { latitude: 37.8199, longitude: -122.4783 },
+        '2023-06-22T10:30:15.000Z'
+      );
+
+      // Verify target was updated (covers line 336)
+      const target = client.aisTargets.get(vesselId);
+      expect(target).toBeDefined();
+      expect(target?.['navigation.position']).toEqual({ latitude: 37.8199, longitude: -122.4783 });
+      expect(target?.lastUpdate).toBe('2023-06-22T10:30:15.000Z');
+    });
+
+    test('should handle vessel state with undefined/invalid paths', () => {
+      // Add some invalid paths to test filtering
+      client.latestValues.set('vessels.self.undefined', {
+        value: 'test',
+        timestamp: '2023-06-22T10:30:15.000Z'
+      });
+      
+      client.latestValues.set('vessels.self.', {
+        value: 'empty',
+        timestamp: '2023-06-22T10:30:15.000Z'
+      });
+
+      client.latestValues.set('vessels.self.valid.path', {
+        value: 'good',
+        timestamp: '2023-06-22T10:30:15.000Z'
+      });
+
+      const state = client.getVesselState();
+
+      // Should only include valid paths
+      expect(state.data['undefined']).toBeUndefined();
+      expect(state.data['']).toBeUndefined();
+      expect(state.data['valid.path']).toBeDefined();
+      expect(state.data['valid.path'].value).toBe('good');
+    });
+  });
+
+  describe('HTTP Error Handling Coverage', () => {
+    beforeEach(() => {
+      client = new SignalKClient({ hostname: 'test.example.com', port: 3000 });
+    });
+
+    test('should handle JSON parsing error in getPathValue', async () => {
+      // Mock response with invalid JSON
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => {
+          throw new Error('Invalid JSON');
+        }
+      } as unknown as Response);
+
+      // Mock console.error to verify error logging
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      const result = await client.getPathValue('navigation.position');
+
+      // Verify error handling (covers line 705, 715)
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Failed to fetch path navigation.position via HTTP:',
+        'Invalid JSON'
+      );
+      expect(result.error).toContain('HTTP fetch failed: Invalid JSON');
+      expect(result.data).toBeNull();
+
+      consoleSpy.mockRestore();
+    });
+
+    test('should handle network error in getPathValue', async () => {
+      // Mock network error
+      mockFetch.mockRejectedValueOnce(new Error('Network timeout'));
+
+      // Mock console.error to verify error logging
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      const result = await client.getPathValue('navigation.position');
+
+      // Verify error handling
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Failed to fetch path navigation.position via HTTP:',
+        'Network timeout'
+      );
+      expect(result.error).toContain('HTTP fetch failed: Network timeout');
+      expect(result.data).toBeNull();
+
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe('Delta Processing Edge Cases', () => {
+    beforeEach(() => {
+      client = new SignalKClient({ hostname: 'test.example.com', port: 3000 });
+    });
+
+    test('should handle delta processing errors gracefully', () => {
+      // Mock console.error to capture error logging
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      // Mock emit to throw an error to trigger line 336
+      const originalEmit = client.emit;
+      client.emit = jest.fn().mockImplementation(() => {
+        throw new Error('Emit error');
+      }) as any;
+
+      const testDelta = {
+        context: 'vessels.self',
+        updates: [
+          {
+            timestamp: '2023-06-22T10:30:15.000Z',
+            source: { label: 'Test', type: 'test' },
+            values: [
+              {
+                path: 'navigation.position',
+                value: { latitude: 37.8199, longitude: -122.4783 }
+              }
+            ]
+          }
+        ]
+      };
+
+      // This should not throw an error but should log it
+      expect(() => {
+        client.handleDelta(testDelta);
+      }).not.toThrow();
+
+      // Verify error was logged (covers line 336)
+      expect(consoleSpy).toHaveBeenCalledWith('Error processing delta:', expect.any(Error));
+
+      // Restore original emit
+      client.emit = originalEmit;
+      consoleSpy.mockRestore();
+    });
+
+    test('should handle populateLatestValuesFromData with null/undefined objects', () => {
+      // Test early return condition for null/undefined objects (line 276)
+      expect(() => {
+        // Use private method directly via type assertion
+        (client as any).populateLatestValuesFromData(null, 'vessels.self', '');
+        (client as any).populateLatestValuesFromData(undefined, 'vessels.self', '');
+        (client as any).populateLatestValuesFromData('not-object', 'vessels.self', '');
+      }).not.toThrow();
+
+      // Verify no data was added
+      expect(client.latestValues.size).toBe(0);
+      expect(client.availablePaths.size).toBe(0);
+    });
+  });
+
+  describe('Additional Coverage for Remaining Lines', () => {
+    beforeEach(() => {
+      client = new SignalKClient({ hostname: 'test.example.com', port: 3000 });
+    });
+
+    test('should handle getPathValue with cached data fallback (line 705, 715)', async () => {
+      // Add cached data
+      client.latestValues.set('vessels.self.navigation.position', {
+        value: { latitude: 37.8199, longitude: -122.4783 },
+        timestamp: '2023-06-22T10:30:15.000Z',
+        source: { label: 'GPS1', type: 'NMEA0183' }
+      });
+
+      // Mock HTTP failure
+      mockFetch.mockRejectedValueOnce(new Error('Network failure'));
+
+      // Mock console.error to capture output
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      const result = await client.getPathValue('navigation.position');
+
+      // Verify cached data is returned (covers line 715)
+      expect(result.data).toBeDefined();
+      expect(result.data!.value).toEqual({ latitude: 37.8199, longitude: -122.4783 });
+      expect(result.error).toContain('HTTP fetch failed: Network failure, using cached value');
+
+      // Verify error was logged (covers line 705)
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Failed to fetch path navigation.position via HTTP:',
+        'Network failure'
+      );
+
+      consoleSpy.mockRestore();
+    });
+
+    test('should cover AIS target assignment edge case (line 336)', () => {
+      // Create a scenario where the target exists but the assignment line is tested
+      const vesselContext = 'vessels.urn:mrn:imo:mmsi:987654321';
+      const vesselId = 'urn:mrn:imo:mmsi:987654321';
+      
+      // Initially create target
+      client.aisTargets.set(vesselId, {
+        mmsi: '987654321',
+        lastUpdate: '2023-06-22T10:30:00.000Z'
+      });
+
+      // Update with navigation data
+      client.updateAISTarget(
+        vesselContext,
+        'navigation.courseOverGround',
+        45.0,
+        '2023-06-22T10:30:15.000Z'
+      );
+
+      // Verify the target was updated (this exercises line 336)
+      const target = client.aisTargets.get(vesselId);
+      expect(target).toBeDefined();
+      expect(target?.['navigation.courseOverGround']).toBe(45.0);
+      expect(target?.lastUpdate).toBe('2023-06-22T10:30:15.000Z');
+    });
+  });
 });

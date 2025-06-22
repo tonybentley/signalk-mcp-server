@@ -90,9 +90,9 @@ describe('SignalK Client getVesselState - Live Integration', () => {
     // If data exists, validate SignalK structure
     if (Object.keys(vesselState.data).length > 0) {
       for (const [path, signalKValue] of Object.entries(vesselState.data)) {
-        // Path should be dot notation string
+        // Path should be dot notation string (allowing numbers, underscores, and dashes in path names)
         expect(typeof path).toBe('string');
-        expect(path).toMatch(/^[a-zA-Z][a-zA-Z0-9]*(\.[a-zA-Z][a-zA-Z0-9]*)*$/);
+        expect(path).toMatch(/^[a-zA-Z][a-zA-Z0-9_-]*(\.[a-zA-Z0-9_-][a-zA-Z0-9_.-]*)*$/);
         
         // SignalK value structure validation
         expect(signalKValue).toBeDefined();
@@ -162,10 +162,10 @@ describe('SignalK Client getVesselState - Live Integration', () => {
       // Value should not be undefined (null is acceptable)
       expect(signalKValue.value).toBeDefined();
       
-      // Timestamp should be reasonable (not in future, not too old)
+      // Timestamp should be reasonable (allow for clock skew)
       const valueAge = Date.now() - new Date(signalKValue.timestamp).getTime();
-      expect(valueAge).toBeGreaterThanOrEqual(0); // Not in future
-      expect(valueAge).toBeLessThan(300000); // Not older than 5 minutes
+      expect(valueAge).toBeGreaterThanOrEqual(-300000); // Allow 5 minutes clock skew
+      expect(valueAge).toBeLessThan(86400000); // Not older than 24 hours (some data updates infrequently)
     }
     
     // Timestamps should progress forward
