@@ -2,30 +2,54 @@
   "name": "signalk-mcp-server",
   "version": "1.0.0",
   "description": "MCP server for SignalK marine data integration",
-  "main": "src/index.ts",
+  "main": "dist/src/index.js",
   "type": "module",
+  "bin": {
+    "signalk-mcp-server": "./dist/src/index.js"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
-    "start": "node --loader ts-node/esm src/index.ts",
+    "start": "npm run build && node dist/src/index.js",
+    "start:dev": "node --loader ts-node/esm src/index.ts",
     "start:prod": "node dist/src/index.js",
     "dev": "node --loader ts-node/esm --watch src/index.ts",
-    "test": "jest",
-    "test:unit": "jest --testPathPatterns=\\.spec\\.ts$",
+    "test": "npm run test:unit",
+    "test:unit": "jest --testPathPatterns=\\.spec\\.ts$ --testPathIgnorePatterns=\\.e2e\\.",
     "test:e2e": "jest --testPathPatterns=\\.e2e\\.spec\\.ts$",
-    "test:watch": "jest --watch",
-    "test:watch:unit": "jest --watch --testPathPatterns=\\.spec\\.ts$",
+    "test:all": "jest",
+    "test:watch": "jest --watch --testPathPatterns=\\.spec\\.ts$ --testPathIgnorePatterns=\\.e2e\\.",
+    "test:watch:unit": "jest --watch --testPathPatterns=\\.spec\\.ts$ --testPathIgnorePatterns=\\.e2e\\.",
     "test:watch:e2e": "jest --watch --testPathPatterns=\\.e2e\\.spec\\.ts$",
-    "test:coverage": "jest --coverage --testPathPatterns=\\.spec\\.ts$",
+    "test:coverage": "jest --coverage --testPathPatterns=\\.spec\\.ts$ --testPathIgnorePatterns=\\.e2e\\.",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "signalk",
     "mcp",
     "marine",
-    "navigation"
+    "navigation",
+    "model-context-protocol",
+    "claude",
+    "ai",
+    "vessel",
+    "ais",
+    "boat"
   ],
   "author": "",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/signalk-mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/signalk-mcp-server/issues"
+  },
+  "homepage": "https://github.com/yourusername/signalk-mcp-server#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.5.0",
     "@signalk/client": "^2.3.0",

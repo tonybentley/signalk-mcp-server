@@ -12,7 +12,7 @@ import type {
   ConnectionStatus,
   AvailablePathsResponse,
   PathValueResponse
-} from './types';
+} from './types/index.js';
 
 export class SignalKClient extends EventEmitter {
   public hostname!: string;
@@ -87,7 +87,8 @@ export class SignalKClient extends EventEmitter {
   setSignalKConfig(options: SignalKClientOptions = {}): void {
     // Set configuration directly from environment variables with defaults
     this.hostname = options.hostname || process.env.SIGNALK_HOST || 'localhost';
-    this.port = parseInt(String(options.port || process.env.SIGNALK_PORT || '3000'));
+    const portValue = parseInt(String(options.port || process.env.SIGNALK_PORT || '3000'));
+    this.port = isNaN(portValue) ? 3000 : portValue;
     this.useTLS = options.useTLS || process.env.SIGNALK_TLS === 'true' || false;
     
     // Build original URL for display purposes

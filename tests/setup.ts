@@ -1,15 +1,10 @@
 /**
  * Jest test setup file
  * 
- * This file runs before each test suite and can be used to:
- * - Set up global test utilities for both unit and e2e tests
+ * This file runs before each test suite and provides:
+ * - Global test utilities for unit tests
  * - Configure test environment
  * - Set up mocks that apply to all tests
- * - Configure global timeouts
- * 
- * Note: This setup applies to both:
- * - Unit tests (*.spec.ts) co-located with source files
- * - Integration/E2E tests (*.e2e.spec.ts) in tests/ directory
  */
 
 import { jest, afterEach } from '@jest/globals';

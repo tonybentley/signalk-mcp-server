@@ -9,7 +9,7 @@ Build a minimal MCP (Model Context Protocol) server that provides AI agents with
 
 ## CORE FUNCTIONALITY
 - Connect to SignalK server via WebSocket
-- Provide current vessel navigation data (position, heading, speed, wind)
+- Provide current vessel data
 - List nearby AIS targets (other vessels)
 - Access system alarms and notifications
 - Subscribe to live data streams from multiple SignalK paths

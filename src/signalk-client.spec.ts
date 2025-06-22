@@ -10,7 +10,7 @@
 
 import { describe, test, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import { SignalKClient } from './signalk-client';
-import type { SignalKClientOptions } from './types';
+import type { SignalKClientOptions } from './types/index.js';
 
 // Mock the @signalk/client module
 jest.mock('@signalk/client', () => ({
@@ -45,6 +45,7 @@ describe('SignalKClient', () => {
     const { Client } = require('@signalk/client');
     mockSignalKClient = {
       on: jest.fn(),
+      once: jest.fn(),
       connect: jest.fn(),
       disconnect: jest.fn()
     };
@@ -406,6 +407,321 @@ describe('SignalKClient', () => {
       
       expect(result.error).toContain('HTTP fetch failed');
       expect(result.data.value).toEqual({ latitude: 37.8199, longitude: -122.4783 });
+    });
+  });
+
+  describe('Connection Management', () => {
+    beforeEach(() => {
+      client = new SignalKClient();
+    });
+
+    test('should resolve immediately if already connected', async () => {
+      client.connected = true;
+      
+      const result = await client.connect();
+      
+      expect(result).toBeUndefined();
+      expect(mockSignalKClient.connect).not.toHaveBeenCalled();
+    });
+
+    test('should handle connection timeout', async () => {
+      jest.useFakeTimers();
+      
+      // Mock the connection to never resolve
+      mockSignalKClient.connect.mockImplementation(() => new Promise(() => {}));
+      
+      const connectPromise = client.connect();
+      
+      // Fast-forward past timeout
+      jest.advanceTimersByTime(10000);
+      
+      await expect(connectPromise).rejects.toThrow('Connection timeout');
+      
+      jest.useRealTimers();
+    });
+
+    test('should handle connection errors', async () => {
+      const error = new Error('Connection failed');
+      
+      // Mock the connection to trigger error event
+      mockSignalKClient.connect.mockImplementation(() => {
+        // Simulate error event being triggered
+        const errorHandler = mockSignalKClient.once.mock.calls.find((call: any) => call[0] === 'error')?.[1];
+        if (errorHandler) {
+          setTimeout(() => errorHandler(error), 0);
+        }
+      });
+      
+      await expect(client.connect()).rejects.toThrow('Connection failed');
+    });
+
+    test('should disconnect properly', () => {
+      client.connected = true;
+      
+      client.disconnect();
+      
+      expect(mockSignalKClient.disconnect).toHaveBeenCalled();
+      expect(client.connected).toBe(false);
+    });
+  });
+
+  describe('Event Handling', () => {
+    beforeEach(() => {
+      client = new SignalKClient();
+    });
+
+    test('should handle connect event', () => {
+      const connectHandler = mockSignalKClient.on.mock.calls.find((call: any) => call[0] === 'connect')?.[1];
+      
+      expect(connectHandler).toBeDefined();
+      
+      connectHandler();
+      
+      expect(client.connected).toBe(true);
+    });
+
+    test('should handle disconnect event', () => {
+      client.connected = true;
+      
+      const disconnectHandler = mockSignalKClient.on.mock.calls.find((call: any) => call[0] === 'disconnect')?.[1];
+      
+      expect(disconnectHandler).toBeDefined();
+      
+      disconnectHandler();
+      
+      expect(client.connected).toBe(false);
+    });
+
+    test('should handle delta events', () => {
+      const deltaHandler = mockSignalKClient.on.mock.calls.find((call: any) => call[0] === 'delta')?.[1];
+      const handleDeltaSpy = jest.spyOn(client, 'handleDelta');
+      
+      expect(deltaHandler).toBeDefined();
+      
+      const testDelta = global.testUtils.createSampleDelta('vessels.self', 'navigation.position', { latitude: 1, longitude: 2 });
+      deltaHandler(testDelta);
+      
+      expect(handleDeltaSpy).toHaveBeenCalledWith(testDelta);
+    });
+  });
+
+  describe('Edge Cases and Error Handling', () => {
+    beforeEach(() => {
+      client = new SignalKClient();
+    });
+
+    test('should handle delta with missing updates', () => {
+      const invalidDelta = {
+        context: 'vessels.self'
+        // Missing updates array
+      };
+      
+      expect(() => client.handleDelta(invalidDelta as any)).not.toThrow();
+    });
+
+    test('should handle delta with empty values array', () => {
+      const delta = {
+        context: 'vessels.self',
+        updates: [{
+          timestamp: '2025-06-21T10:00:00.000Z',
+          source: { label: 'TEST', type: 'test' },
+          values: []
+        }]
+      };
+      
+      expect(() => client.handleDelta(delta)).not.toThrow();
+    });
+
+    test('should handle delta with null/undefined values', () => {
+      const delta = {
+        context: 'vessels.self',
+        updates: [{
+          timestamp: '2025-06-21T10:00:00.000Z',
+          source: { label: 'TEST', type: 'test' },
+          values: [{
+            path: 'test.path',
+            value: null
+          }]
+        }]
+      };
+      
+      client.handleDelta(delta);
+      
+      expect(client.latestValues.has('vessels.self.test.path')).toBe(true);
+      expect(client.latestValues.get('vessels.self.test.path')?.value).toBe(null);
+    });
+
+    test('should handle notifications with missing timestamp', () => {
+      const delta = global.testUtils.createSampleDelta(
+        'vessels.self',
+        'notifications.test.alarm',
+        {
+          state: 'alert',
+          message: 'Test alarm'
+          // Missing timestamp
+        }
+      );
+      
+      client.handleDelta(delta);
+      
+      expect(client.activeAlarms.has('notifications.test.alarm')).toBe(true);
+      const alarm = client.activeAlarms.get('notifications.test.alarm');
+      expect(alarm?.timestamp).toBeDefined(); // Should use delta timestamp
+    });
+
+    test('should handle AIS data with missing MMSI', () => {
+      const delta = {
+        context: 'vessels.unknown.context',
+        updates: [{
+          timestamp: '2025-06-21T10:00:00.000Z',
+          source: { label: 'AIS', type: 'NMEA0183' },
+          values: [{
+            path: 'navigation.position',
+            value: { latitude: 37.8199, longitude: -122.4783 }
+          }]
+        }]
+      };
+      
+      client.handleDelta(delta);
+      
+      expect(client.aisTargets.has('unknown.context')).toBe(true);
+    });
+
+    test('should handle getPathValue with empty path', async () => {
+      const result = await client.getPathValue('');
+      
+      expect(result.path).toBe('');
+      expect(result.data).toBe(null);
+      expect(result.error).toContain('HTTP fetch failed');
+    });
+
+    test('should handle getPathValue with undefined path', async () => {
+      const result = await client.getPathValue(undefined as any);
+      
+      expect(result.path).toBe(undefined);
+      expect(result.data).toBe(null);
+      expect(result.error).toContain('HTTP fetch failed');
+    });
+
+    test('should handle configuration with invalid port', () => {
+      const clientWithInvalidPort = new SignalKClient({ port: 'invalid' as any });
+      
+      expect(clientWithInvalidPort.port).toBe(3000); // Should fallback to default
+    });
+
+    test('should handle old AIS targets cleanup', () => {
+      const oldTimestamp = new Date(Date.now() - 25 * 60 * 1000).toISOString(); // 25 minutes ago
+      
+      client.aisTargets.set('old.target', {
+        mmsi: 'old.target',
+        lastUpdate: oldTimestamp,
+        'navigation.position': { latitude: 1, longitude: 1 }
+      });
+      
+      const recentTimestamp = new Date().toISOString();
+      client.aisTargets.set('recent.target', {
+        mmsi: 'recent.target',
+        lastUpdate: recentTimestamp,
+        'navigation.position': { latitude: 2, longitude: 2 }
+      });
+      
+      const result = client.getAISTargets();
+      
+      expect(result.targets).toHaveLength(1);
+      expect(result.targets[0].mmsi).toBe('recent.target');
+    });
+
+    test('should handle malformed notification values', () => {
+      const delta = {
+        context: 'vessels.self',
+        updates: [{
+          timestamp: '2025-06-21T10:00:00.000Z',
+          source: { label: 'TEST', type: 'test' },
+          values: [{
+            path: 'notifications.test.alarm',
+            value: 'invalid notification format' // Should be object
+          }]
+        }]
+      };
+      
+      expect(() => client.handleDelta(delta)).not.toThrow();
+      
+      // Should not create an alarm for invalid format
+      expect(client.activeAlarms.has('notifications.test.alarm')).toBe(false);
+    });
+
+    test('should handle HTTP response that is not ok', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found'
+      } as Response);
+      
+      const result = await client.getPathValue('navigation.position');
+      
+      expect(result.error).toContain('HTTP fetch failed');
+      expect(result.data).toBe(null);
+    });
+
+    test('should handle non-JSON HTTP response', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockImplementation(() => {
+          throw new Error('Invalid JSON');
+        })
+      } as unknown as Response);
+      
+      const result = await client.listAvailablePaths();
+      
+      expect(result.error).toContain('HTTP fetch failed');
+    });
+  });
+
+  describe('Data Formatting and Validation', () => {
+    beforeEach(() => {
+      client = new SignalKClient();
+    });
+
+    test('should format vessel state with empty data correctly', () => {
+      const result = client.getVesselState();
+      
+      expect(result.connected).toBe(false);
+      expect(result.context).toBe('vessels.self');
+      expect(result.data).toEqual({});
+      expect(result.timestamp).toBeDefined();
+      expect(typeof result.timestamp).toBe('string');
+    });
+
+    test('should format AIS targets with empty data correctly', () => {
+      const result = client.getAISTargets();
+      
+      expect(result.connected).toBe(false);
+      expect(result.count).toBe(0);
+      expect(result.targets).toEqual([]);
+      expect(result.timestamp).toBeDefined();
+    });
+
+    test('should format active alarms with empty data correctly', () => {
+      const result = client.getActiveAlarms();
+      
+      expect(result.connected).toBe(false);
+      expect(result.count).toBe(0);
+      expect(result.alarms).toEqual([]);
+      expect(result.timestamp).toBeDefined();
+    });
+
+    test('should format connection status correctly', () => {
+      const result = client.getConnectionStatus();
+      
+      expect(result.connected).toBe(false);
+      expect(result.hostname).toBe('localhost');
+      expect(result.port).toBe(3000);
+      expect(result.useTLS).toBe(false);
+      expect(result.context).toBe('vessels.self');
+      expect(result.timestamp).toBeDefined();
+      expect(typeof result.pathCount).toBe('number');
+      expect(typeof result.aisTargetCount).toBe('number');
+      expect(typeof result.activeAlarmCount).toBe('number');
     });
   });
 });
