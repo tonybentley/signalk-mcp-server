@@ -56,7 +56,7 @@ describe('SignalKClient', () => {
       disconnect: jest.fn(),
     };
     const ClientModule = jest.requireMock('@signalk/client');
-    ClientModule.Client.mockImplementation(() => mockSignalKClient);
+    (ClientModule as any).Client.mockImplementation(() => mockSignalKClient);
   });
 
   afterEach(() => {
