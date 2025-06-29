@@ -1,6 +1,6 @@
 /**
  * Domain Interfaces
- * 
+ *
  * Business logic interfaces for the SignalK MCP server
  */
 

@@ -16,7 +16,7 @@ A Model Context Protocol (MCP) server that provides AI agents with read-only acc
 
 ### Prerequisites
 
-- Node.js 18.0.0 or higher
+- Node.js 18.0.0 or higher (required for native fetch support)
 - Access to a SignalK server (local or remote)
 
 ### Option 1: Install via npm/npx (Recommended)
@@ -313,8 +313,19 @@ claude mcp add-json signalk-secure '{
 
 The MCP server provides the following tools to AI agents:
 
+### `get_initial_context()` 🌟
+**Start here!** Returns comprehensive SignalK context and documentation to help AI agents understand the system. This tool provides:
+- SignalK overview and core concepts
+- Complete data model reference with path meanings  
+- Path categorization guide for understanding data organization
+- MCP tool reference with usage patterns and examples
+- Server information and capabilities
+- Note: When Claude Desktop makes automatic resource discovery available this will be removed
+
+**Usage:** Call this tool first to gain essential context about the SignalK system before using other tools.
+
 ### `get_vessel_state()`
-Returns current vessel navigation data including position, heading, speed, and wind information.
+Returns current vessel navigation data including position, heading, speed, wind information, and vessel identity (name, MMSI). Combines delta message data with top-level SignalK properties for comprehensive vessel information.
 
 ### `get_ais_targets()`  
 Retrieves nearby vessels from AIS with position, course, speed, and identification data.
@@ -325,8 +336,6 @@ Returns current system notifications, alerts, and alarm states.
 ### `list_available_paths()`
 Discovers and lists all available SignalK data paths on the connected server.
 
-### `subscribe_to_paths(paths[])`
-Subscribes to live updates from multiple SignalK paths with configurable update periods.
 
 ### `get_path_value(path)`
 Gets the latest value for any specific SignalK path.
@@ -336,12 +345,14 @@ Returns WebSocket connection state, health metrics, and reconnection status.
 
 ## Available Resources
 
-The server exposes these MCP resources:
+The server exposes these static reference resources:
 
-- `signalk://navigation` - Vessel navigation data
-- `signalk://ais` - AIS target information  
-- `signalk://alarms` - System notifications
-- `signalk://subscription` - Live data stream status
+- `signalk://signalk_overview` - SignalK overview and core concepts
+- `signalk://data_model_reference` - Comprehensive SignalK data model reference
+- `signalk://path_categories_guide` - Guide to understanding SignalK paths
+- `signalk://mcp_tool_reference` - Reference for available MCP tools and usage patterns
+
+**Note:** While these resources can be accessed individually via the MCP resource protocol, the `get_initial_context()` tool provides a more convenient way to access all reference materials in a single call, making it the recommended approach for AI agents to understand the system.
 
 ## Development
 
@@ -419,11 +430,12 @@ This is a minimal viable product (MVP) focused on basic functionality. The follo
 - Collision avoidance calculations
 - Route planning or navigation assistance  
 - Chart data integration
-- Device control functions
+- Device control functions (read-only only)
 - Complex analytics or historical data
 - Multi-vessel fleet management
 - Weather routing
 - Anchor watch features
+- Live data subscriptions (removed - use individual path queries instead)
 
 ## Troubleshooting
 
@@ -442,11 +454,16 @@ This is a minimal viable product (MVP) focused on basic functionality. The follo
 - Use `list_available_paths()` to discover available data
 - Verify vessel is transmitting expected data paths
 - Check SignalK server data sources and plugins
+- For vessel identity (name, MMSI), ensure top-level properties are configured in SignalK server
 
 **WebSocket disconnections:**
 - Review network stability
 - Adjust RECONNECT_INTERVAL for network conditions
 - Monitor connection status with `get_connection_status()`
+
+**Node.js version issues:**
+- Ensure Node.js 18+ is being used (required for native fetch)
+- Claude Desktop may default to Node.js 16 - configure to use newer version
 
 ### Debug Mode
 

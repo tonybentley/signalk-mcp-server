@@ -1,6 +1,6 @@
 /**
  * SignalKMCPServer Unit Tests
- * 
+ *
  * Comprehensive tests for the MCP server functionality including:
  * - Server initialization and configuration
  * - Tool handler setup and execution
@@ -8,7 +8,14 @@
  * - Error handling and edge cases
  */
 
-import { describe, test, expect, jest, beforeEach, afterEach } from '@jest/globals';
+import {
+  describe,
+  test,
+  expect,
+  jest,
+  beforeEach,
+  afterEach,
+} from '@jest/globals';
 import { SignalKMCPServer } from './signalk-mcp-server';
 import { SignalKClient } from './signalk-client';
 import type { SignalKMCPServerOptions } from './signalk-mcp-server';
@@ -19,6 +26,7 @@ jest.mock('./signalk-client', () => ({
     on: jest.fn(),
     connect: jest.fn().mockImplementation(() => Promise.resolve()), // Returns Promise<void>
     getVesselState: jest.fn(),
+    getVesselStateWithIdentity: jest.fn(),
     getAISTargets: jest.fn(),
     getActiveAlarms: jest.fn(),
     listAvailablePaths: jest.fn(),
@@ -32,7 +40,7 @@ jest.mock('./signalk-client', () => ({
     setupEventHandlers: jest.fn(),
     setSignalKConfig: jest.fn(),
     client: jest.fn(),
-  }))
+  })),
 }));
 const MockedSignalKClient = jest.mocked(SignalKClient);
 
@@ -73,12 +81,13 @@ describe('SignalKMCPServer', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    
+
     // Reset the mock to always return the same instance
     mockSignalKClient = {
       on: jest.fn(),
       connect: jest.fn().mockImplementation(() => Promise.resolve()),
       getVesselState: jest.fn(),
+      getVesselStateWithIdentity: jest.fn(),
       getAISTargets: jest.fn(),
       getActiveAlarms: jest.fn(),
       listAvailablePaths: jest.fn(),
@@ -93,10 +102,10 @@ describe('SignalKMCPServer', () => {
       setSignalKConfig: jest.fn(),
       client: jest.fn(),
     } as any;
-    
+
     // Make the constructor always return our specific mock instance
     MockedSignalKClient.mockImplementation(() => mockSignalKClient);
-    
+
     // Spy on console.error
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
   });
@@ -110,8 +119,11 @@ describe('SignalKMCPServer', () => {
       new SignalKMCPServer();
 
       expect(MockedSignalKClient).toHaveBeenCalledWith();
-      expect(mockServer.setRequestHandler).toHaveBeenCalledTimes(2);
-      expect(mockSignalKClient.on).toHaveBeenCalledWith('error', expect.any(Function));
+      expect(mockServer.setRequestHandler).toHaveBeenCalledTimes(4); // 2 for tools + 2 for resources
+      expect(mockSignalKClient.on).toHaveBeenCalledWith(
+        'error',
+        expect.any(Function),
+      );
     });
 
     test('should initialize with custom options', () => {
@@ -138,21 +150,27 @@ describe('SignalKMCPServer', () => {
       const server = new SignalKMCPServer();
 
       expect(server).toBeDefined();
-      
+
       process.env = originalEnv;
     });
 
     test('should set up error handler for SignalK client', () => {
       new SignalKMCPServer();
 
-      expect(mockSignalKClient.on).toHaveBeenCalledWith('error', expect.any(Function));
+      expect(mockSignalKClient.on).toHaveBeenCalledWith(
+        'error',
+        expect.any(Function),
+      );
 
       // Test the error handler
       const errorHandler = mockSignalKClient.on.mock.calls[0][1];
       const testError = new Error('Test error');
       errorHandler(testError);
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith('SignalK connection error:', 'Test error');
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'SignalK connection error:',
+        'Test error',
+      );
     });
 
     test('should attempt SignalK connection during initialization', () => {
@@ -172,7 +190,9 @@ describe('SignalKMCPServer', () => {
       await server.connectToSignalK();
 
       expect(mockSignalKClient.connect).toHaveBeenCalled();
-      expect(consoleErrorSpy).toHaveBeenCalledWith('SignalK client connected successfully');
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'SignalK client connected successfully',
+      );
     });
 
     test('should handle connection failure gracefully', async () => {
@@ -182,7 +202,10 @@ describe('SignalKMCPServer', () => {
 
       await server.connectToSignalK();
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to connect to SignalK:', 'Connection failed');
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Failed to connect to SignalK:',
+        'Connection failed',
+      );
     });
 
     test('should handle connection failure with non-Error object', async () => {
@@ -191,7 +214,10 @@ describe('SignalKMCPServer', () => {
 
       await server.connectToSignalK();
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to connect to SignalK:', 'String error');
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Failed to connect to SignalK:',
+        'String error',
+      );
     });
   });
 
@@ -201,7 +227,7 @@ describe('SignalKMCPServer', () => {
 
       expect(mockServer.setRequestHandler).toHaveBeenCalledWith(
         'ListToolsRequestSchema',
-        expect.any(Function)
+        expect.any(Function),
       );
     });
 
@@ -210,17 +236,18 @@ describe('SignalKMCPServer', () => {
 
       expect(mockServer.setRequestHandler).toHaveBeenCalledWith(
         'CallToolRequestSchema',
-        expect.any(Function)
+        expect.any(Function),
       );
     });
 
     test('should return correct tools list', async () => {
       new SignalKMCPServer();
 
-      const listToolsHandler = mockServer.setRequestHandler.mock.calls[0][1] as Function;
+      const listToolsHandler = mockServer.setRequestHandler.mock
+        .calls[0][1] as Function;
       const result = await listToolsHandler();
 
-      expect(result.tools).toHaveLength(6);
+      expect(result.tools).toHaveLength(7);
       expect(result.tools.map((tool: any) => tool.name)).toEqual([
         'get_vessel_state',
         'get_ais_targets',
@@ -228,6 +255,7 @@ describe('SignalKMCPServer', () => {
         'list_available_paths',
         'get_path_value',
         'get_connection_status',
+        'get_initial_context',
       ]);
     });
   });
@@ -237,35 +265,41 @@ describe('SignalKMCPServer', () => {
 
     beforeEach(() => {
       new SignalKMCPServer();
-      callToolHandler = mockServer.setRequestHandler.mock.calls[1][1] as Function;
+      callToolHandler = mockServer.setRequestHandler.mock
+        .calls[1][1] as Function;
     });
 
     test('should execute get_vessel_state tool', async () => {
-      const mockData = { 
-        connected: true, 
+      const mockData = {
+        connected: true,
         context: 'vessels.self',
         data: { position: 'test' },
-        timestamp: '2025-06-21T10:00:00.000Z'
+        timestamp: '2025-06-21T10:00:00.000Z',
       };
-      mockSignalKClient.getVesselState.mockReturnValue(mockData);
+      mockSignalKClient.getVesselStateWithIdentity.mockResolvedValue(mockData);
 
       const request = {
-        params: { name: 'get_vessel_state', arguments: {} }
+        params: { name: 'get_vessel_state', arguments: {} },
       };
 
       const result = await callToolHandler(request);
 
-      expect(mockSignalKClient.getVesselState).toHaveBeenCalled();
+      expect(mockSignalKClient.getVesselStateWithIdentity).toHaveBeenCalled();
       expect(result.content[0].type).toBe('text');
       expect(JSON.parse(result.content[0].text)).toEqual(mockData);
     });
 
     test('should execute get_ais_targets tool', async () => {
-      const mockData = { connected: true, targets: [], count: 0, timestamp: '2025-06-21T10:00:00.000Z' };
+      const mockData = {
+        connected: true,
+        targets: [],
+        count: 0,
+        timestamp: '2025-06-21T10:00:00.000Z',
+      };
       mockSignalKClient.getAISTargets.mockReturnValue(mockData);
 
       const request = {
-        params: { name: 'get_ais_targets', arguments: {} }
+        params: { name: 'get_ais_targets', arguments: {} },
       };
 
       const result = await callToolHandler(request);
@@ -275,11 +309,16 @@ describe('SignalKMCPServer', () => {
     });
 
     test('should execute get_active_alarms tool', async () => {
-      const mockData = { connected: true, alarms: [], count: 0, timestamp: '2025-06-21T10:00:00.000Z' };
+      const mockData = {
+        connected: true,
+        alarms: [],
+        count: 0,
+        timestamp: '2025-06-21T10:00:00.000Z',
+      };
       mockSignalKClient.getActiveAlarms.mockReturnValue(mockData);
 
       const request = {
-        params: { name: 'get_active_alarms', arguments: {} }
+        params: { name: 'get_active_alarms', arguments: {} },
       };
 
       const result = await callToolHandler(request);
@@ -289,11 +328,16 @@ describe('SignalKMCPServer', () => {
     });
 
     test('should execute list_available_paths tool', async () => {
-      const mockData = { connected: true, paths: ['navigation.position'], count: 1, timestamp: '2025-06-21T10:00:00.000Z' };
+      const mockData = {
+        connected: true,
+        paths: ['navigation.position'],
+        count: 1,
+        timestamp: '2025-06-21T10:00:00.000Z',
+      };
       mockSignalKClient.listAvailablePaths.mockResolvedValue(mockData);
 
       const request = {
-        params: { name: 'list_available_paths', arguments: {} }
+        params: { name: 'list_available_paths', arguments: {} },
       };
 
       const result = await callToolHandler(request);
@@ -303,23 +347,33 @@ describe('SignalKMCPServer', () => {
     });
 
     test('should execute get_path_value tool', async () => {
-      const mockData = { connected: true, path: 'navigation.position', data: { value: 'test' }, timestamp: '2025-06-21T10:00:00.000Z' };
+      const mockData = {
+        connected: true,
+        path: 'navigation.position',
+        data: { value: 'test' },
+        timestamp: '2025-06-21T10:00:00.000Z',
+      };
       mockSignalKClient.getPathValue.mockResolvedValue(mockData);
 
       const request = {
-        params: { name: 'get_path_value', arguments: { path: 'navigation.position' } }
+        params: {
+          name: 'get_path_value',
+          arguments: { path: 'navigation.position' },
+        },
       };
 
       const result = await callToolHandler(request);
 
-      expect(mockSignalKClient.getPathValue).toHaveBeenCalledWith('navigation.position');
+      expect(mockSignalKClient.getPathValue).toHaveBeenCalledWith(
+        'navigation.position',
+      );
       expect(JSON.parse(result.content[0].text)).toEqual(mockData);
     });
 
     test('should execute get_connection_status tool', async () => {
-      const mockData = { 
-        connected: false, 
-        hostname: 'localhost', 
+      const mockData = {
+        connected: false,
+        hostname: 'localhost',
         port: 3000,
         url: 'localhost:3000',
         wsUrl: 'ws://localhost:3000',
@@ -329,12 +383,12 @@ describe('SignalKMCPServer', () => {
         timestamp: '2025-06-21T10:00:00.000Z',
         pathCount: 0,
         aisTargetCount: 0,
-        activeAlarmCount: 0
+        activeAlarmCount: 0,
       };
       mockSignalKClient.getConnectionStatus.mockReturnValue(mockData);
 
       const request = {
-        params: { name: 'get_connection_status', arguments: {} }
+        params: { name: 'get_connection_status', arguments: {} },
       };
 
       const result = await callToolHandler(request);
@@ -343,24 +397,43 @@ describe('SignalKMCPServer', () => {
       expect(JSON.parse(result.content[0].text)).toEqual(mockData);
     });
 
-    test('should handle unknown tool gracefully', async () => {
+    test('should execute get_initial_context tool', async () => {
       const request = {
-        params: { name: 'unknown_tool', arguments: {} }
+        params: { name: 'get_initial_context', arguments: {} },
       };
 
-      await expect(callToolHandler(request)).rejects.toThrow('Unknown tool: unknown_tool');
+      const result = await callToolHandler(request);
+      const parsedResult = JSON.parse(result.content[0].text);
+
+      expect(parsedResult).toHaveProperty('server_info');
+      expect(parsedResult.server_info).toHaveProperty('name');
+      expect(parsedResult.server_info).toHaveProperty('version');
+      expect(parsedResult.server_info).toHaveProperty('loaded_at');
+      expect(parsedResult.server_info).toHaveProperty('description');
+    });
+
+    test('should handle unknown tool gracefully', async () => {
+      const request = {
+        params: { name: 'unknown_tool', arguments: {} },
+      };
+
+      await expect(callToolHandler(request)).rejects.toThrow(
+        'Unknown tool: unknown_tool',
+      );
     });
 
     test('should handle tool execution errors', async () => {
-      mockSignalKClient.getVesselState.mockImplementation(() => {
+      mockSignalKClient.getVesselStateWithIdentity.mockImplementation(() => {
         throw new Error('Tool execution failed');
       });
 
       const request = {
-        params: { name: 'get_vessel_state', arguments: {} }
+        params: { name: 'get_vessel_state', arguments: {} },
       };
 
-      await expect(callToolHandler(request)).rejects.toThrow('Tool execution failed: Tool execution failed');
+      await expect(callToolHandler(request)).rejects.toThrow(
+        'Tool execution failed: Tool execution failed',
+      );
     });
   });
 
@@ -372,8 +445,13 @@ describe('SignalKMCPServer', () => {
     });
 
     test('getVesselState should return formatted response', async () => {
-      const mockData = { connected: true, context: 'vessels.self', data: {}, timestamp: '2025-06-21T10:00:00.000Z' };
-      mockSignalKClient.getVesselState.mockReturnValue(mockData);
+      const mockData = {
+        connected: true,
+        context: 'vessels.self',
+        data: {},
+        timestamp: '2025-06-21T10:00:00.000Z',
+      };
+      mockSignalKClient.getVesselStateWithIdentity.mockResolvedValue(mockData);
 
       const result = await server.getVesselState();
 
@@ -382,7 +460,12 @@ describe('SignalKMCPServer', () => {
     });
 
     test('getAISTargets should return formatted response', async () => {
-      const mockData = { connected: true, targets: [], count: 0, timestamp: '2025-06-21T10:00:00.000Z' };
+      const mockData = {
+        connected: true,
+        targets: [],
+        count: 0,
+        timestamp: '2025-06-21T10:00:00.000Z',
+      };
       mockSignalKClient.getAISTargets.mockReturnValue(mockData);
 
       const result = await server.getAISTargets();
@@ -392,7 +475,12 @@ describe('SignalKMCPServer', () => {
     });
 
     test('getActiveAlarms should return formatted response', async () => {
-      const mockData = { connected: true, alarms: [], count: 0, timestamp: '2025-06-21T10:00:00.000Z' };
+      const mockData = {
+        connected: true,
+        alarms: [],
+        count: 0,
+        timestamp: '2025-06-21T10:00:00.000Z',
+      };
       mockSignalKClient.getActiveAlarms.mockReturnValue(mockData);
 
       const result = await server.getActiveAlarms();
@@ -402,7 +490,12 @@ describe('SignalKMCPServer', () => {
     });
 
     test('listAvailablePaths should return formatted response', async () => {
-      const mockData = { connected: true, paths: [], count: 0, timestamp: '2025-06-21T10:00:00.000Z' };
+      const mockData = {
+        connected: true,
+        paths: [],
+        count: 0,
+        timestamp: '2025-06-21T10:00:00.000Z',
+      };
       mockSignalKClient.listAvailablePaths.mockResolvedValue(mockData);
 
       const result = await server.listAvailablePaths();
@@ -412,7 +505,12 @@ describe('SignalKMCPServer', () => {
     });
 
     test('getPathValue should return formatted response', async () => {
-      const mockData = { connected: true, path: 'test.path', data: null, timestamp: '2025-06-21T10:00:00.000Z' };
+      const mockData = {
+        connected: true,
+        path: 'test.path',
+        data: null,
+        timestamp: '2025-06-21T10:00:00.000Z',
+      };
       mockSignalKClient.getPathValue.mockResolvedValue(mockData);
 
       const result = await server.getPathValue('test.path');
@@ -423,8 +521,8 @@ describe('SignalKMCPServer', () => {
     });
 
     test('getConnectionStatus should return formatted response', async () => {
-      const mockData = { 
-        connected: false, 
+      const mockData = {
+        connected: false,
         hostname: 'localhost',
         port: 3000,
         url: 'localhost:3000',
@@ -435,7 +533,7 @@ describe('SignalKMCPServer', () => {
         timestamp: '2025-06-21T10:00:00.000Z',
         pathCount: 0,
         aisTargetCount: 0,
-        activeAlarmCount: 0
+        activeAlarmCount: 0,
       };
       mockSignalKClient.getConnectionStatus.mockReturnValue(mockData);
 
@@ -443,6 +541,18 @@ describe('SignalKMCPServer', () => {
 
       expect(result.content[0].type).toBe('text');
       expect(JSON.parse(result.content[0].text)).toEqual(mockData);
+    });
+
+    test('getInitialContext should return formatted response', async () => {
+      const result = await server.getInitialContext();
+
+      expect(result.content[0].type).toBe('text');
+      const parsedResult = JSON.parse(result.content[0].text);
+      expect(parsedResult).toHaveProperty('server_info');
+      expect(parsedResult.server_info).toHaveProperty('name');
+      expect(parsedResult.server_info).toHaveProperty('version');
+      expect(parsedResult.server_info).toHaveProperty('loaded_at');
+      expect(parsedResult.server_info).toHaveProperty('description');
     });
   });
 
@@ -454,7 +564,9 @@ describe('SignalKMCPServer', () => {
       await server.run();
 
       expect(mockServer.connect).toHaveBeenCalledWith(mockStdioTransport);
-      expect(consoleErrorSpy).toHaveBeenCalledWith('signalk-mcp-server v1.0.0 running on stdio');
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'signalk-mcp-server v1.0.0 running on stdio',
+      );
     });
 
     test('should handle connection errors during run', async () => {
@@ -469,12 +581,14 @@ describe('SignalKMCPServer', () => {
       mockServer.connect.mockResolvedValue(undefined as never);
       const server = new SignalKMCPServer({
         serverName: 'test-server',
-        serverVersion: '2.0.0'
+        serverVersion: '2.0.0',
       });
 
       await server.run();
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith('test-server v2.0.0 running on stdio');
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'test-server v2.0.0 running on stdio',
+      );
     });
   });
 
@@ -495,28 +609,39 @@ describe('SignalKMCPServer', () => {
       new SignalKMCPServer();
 
       const errorHandler = mockSignalKClient.on.mock.calls[0][1];
-      
+
       // Test with Error object
       const error = new Error('Test error');
       errorHandler(error);
-      expect(consoleErrorSpy).toHaveBeenCalledWith('SignalK connection error:', 'Test error');
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'SignalK connection error:',
+        'Test error',
+      );
 
       // Test with object that has no message property
       const errorObj = { code: 'ECONNREFUSED' };
       errorHandler(errorObj);
-      expect(consoleErrorSpy).toHaveBeenCalledWith('SignalK connection error:', errorObj);
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'SignalK connection error:',
+        errorObj,
+      );
     });
 
     test('should handle async connection errors during initialization', async () => {
       const connectionError = new Error('Async connection error');
-      mockSignalKClient.connect.mockImplementation(() => Promise.reject(connectionError));
+      mockSignalKClient.connect.mockImplementation(() =>
+        Promise.reject(connectionError),
+      );
 
       const server = new SignalKMCPServer();
 
       // Call the connectToSignalK method directly to test the error handling
       await server.connectToSignalK();
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to connect to SignalK:', 'Async connection error');
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Failed to connect to SignalK:',
+        'Async connection error',
+      );
     });
   });
 });

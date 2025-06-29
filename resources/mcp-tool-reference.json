@@ -1,0 +1,87 @@
+{
+  "description": "Available MCP tools for SignalK interaction",
+  "tools": {
+    "signalk:get_vessel_state": {
+      "purpose": "Get comprehensive vessel data snapshot",
+      "returns": "Current values for all available paths",
+      "response_format": "Object with path keys and value/timestamp objects",
+      "use_when": "Need complete vessel status overview",
+      "frequency": "Use sparingly - data intensive operation",
+      "efficiency_note": "Contains hundreds of data points - cache results"
+    },
+    "signalk:get_ais_targets": {
+      "purpose": "Get nearby vessel traffic information", 
+      "returns": "Array of AIS contacts with positions and vessel details",
+      "response_format": "Array of vessel objects with MMSI, position, course, speed",
+      "use_when": "Traffic analysis, collision avoidance, situational awareness",
+      "frequency": "Can call frequently - AIS updates every few seconds",
+      "efficiency_note": "Updates continuously - good for real-time awareness"
+    },
+    "signalk:get_active_alarms": {
+      "purpose": "Get current system alerts and notifications",
+      "returns": "Active alarms with severity levels and messages",
+      "response_format": "Array of alarm objects with path, state, message",
+      "use_when": "System health checks, troubleshooting issues",
+      "frequency": "Check when concerned about system status",
+      "efficiency_note": "Typically small dataset unless problems exist"
+    },
+    "signalk:list_available_paths": {
+      "purpose": "Discover what data is available on this vessel",
+      "returns": "List of all SignalK paths currently providing data",
+      "response_format": "Object with paths array and count",
+      "use_when": "System discovery, understanding vessel capabilities",
+      "frequency": "Rarely - vessel capabilities don't change often",
+      "efficiency_note": "Capabilities are relatively static"
+    },
+    "signalk:get_path_value": {
+      "purpose": "Get current value for a specific SignalK path",
+      "parameters": {
+        "path": "Specific SignalK path to query (e.g., 'navigation.position')"
+      },
+      "returns": "Current value and timestamp for the specified path",
+      "response_format": "Single value with timestamp",
+      "use_when": "Need specific current value without full vessel state",
+      "frequency": "Good for targeted queries - much more efficient than full state",
+      "efficiency_note": "Highly efficient for single data points"
+    },
+    "signalk:get_connection_status": {
+      "purpose": "Check SignalK server connectivity and health",
+      "returns": "Connection status, server info, basic statistics",
+      "response_format": "Object with connection details and server metadata",
+      "use_when": "Troubleshooting connectivity issues, system diagnostics",
+      "frequency": "As needed for diagnostics",
+      "efficiency_note": "Lightweight operation"
+    }
+  },
+  "usage_patterns": {
+    "initial_discovery": [
+      "get_connection_status() - verify connectivity",
+      "list_available_paths() - understand capabilities", 
+      "get_vessel_state() - get complete picture"
+    ],
+    "ongoing_monitoring": [
+      "get_path_value() for specific updates",
+      "get_ais_targets() for traffic awareness",
+      "get_active_alarms() when needed"
+    ],
+    "troubleshooting": [
+      "get_connection_status() - check connectivity",
+      "get_active_alarms() - identify issues",
+      "get_path_value() for specific diagnostics"
+    ]
+  },
+  "efficiency_guidelines": {
+    "avoid_repetition": "Don't call get_vessel_state() multiple times in same conversation",
+    "cache_results": "Remember data from previous tool calls within conversation",
+    "targeted_queries": "Use get_path_value() for specific data instead of full state",
+    "batch_analysis": "Analyze multiple aspects from single get_vessel_state() call",
+    "path_categorization": "Group related paths when analyzing data"
+  },
+  "data_interpretation": {
+    "units": "All SignalK values use SI units (meters, seconds, Kelvin, radians)",
+    "timestamps": "All data includes RFC 3339 timestamps for freshness checking",
+    "missing_data": "Paths may not exist if sensors/systems not installed",
+    "multiple_sources": "Same data may come from multiple devices",
+    "null_values": "Null values indicate sensor offline or no valid reading"
+  }
+}

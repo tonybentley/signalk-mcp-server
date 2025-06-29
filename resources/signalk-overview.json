@@ -1,0 +1,62 @@
+{
+  "title": "SignalK Overview",
+  "sections": {
+    "what_is_signalk": {
+      "title": "What is SignalK?",
+      "content": "SignalK is an open marine data standard built on JSON, WebSockets, and HTTP. It provides a unified way to access boat data from various sensors, instruments, and systems."
+    },
+    "core_concepts": {
+      "title": "Core Concepts",
+      "data_organization": {
+        "vessels": "Container for all vessel-specific data",
+        "self": "Refers to the local vessel (identified by MMSI or UUID)",
+        "paths": "Hierarchical data structure using dot notation (e.g., navigation.position)",
+        "values": "Actual sensor readings with timestamps and source information"
+      },
+      "data_model_structure": {
+        "description": "Hierarchical organization of vessel data",
+        "categories": {
+          "navigation": "position, heading, speed, course",
+          "electrical": "batteries, solar, inverters, chargers",
+          "propulsion": "engines, transmissions, fuel",
+          "environment": "temperature, humidity, pressure",
+          "design": "vessel specifications",
+          "sensors": "AIS, GPS, radar configurations",
+          "steering": "autopilot, rudder",
+          "tanks": "fuel, water, waste",
+          "communication": "radio, internet, phone"
+        }
+      }
+    },
+    "units_and_formats": {
+      "title": "Units and Formats",
+      "description": "All values use SI units consistently",
+      "units": {
+        "temperature": "Kelvin (add 273.15 to Celsius)",
+        "angles": "Radians (multiply by 57.296 for degrees)",
+        "speed": "Meters per second (multiply by 1.944 for knots)",
+        "pressure": "Pascals (divide by 100 for millibars)",
+        "distance": "Meters",
+        "time": "RFC 3339 format (ISO 8601 with timezone)"
+      }
+    },
+    "data_access_methods": {
+      "title": "Data Access Methods",
+      "methods": {
+        "rest_api": "GET requests to /signalk/v1/api/vessels/self/[path]",
+        "websocket": "Real-time streaming updates via delta messages",
+        "full_model": "Complete data snapshot",
+        "delta_updates": "Incremental changes with timestamps"
+      }
+    },
+    "context_and_sources": {
+      "title": "Context and Sources",
+      "concepts": {
+        "context": "Path to vessel (e.g., vessels.urn:mrn:imo:mmsi:123456789)",
+        "self_context": "When context is omitted, refers to local vessel",
+        "sources": "Each value includes source device information",
+        "multiple_sources": "Same data can come from multiple devices"
+      }
+    }
+  }
+}

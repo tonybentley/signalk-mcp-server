@@ -1,6 +1,6 @@
 /**
  * MCP (Model Context Protocol) Types
- * 
+ *
  * Types related to the MCP server implementation
  */
 
@@ -34,4 +34,17 @@ export interface MCPToolDefinition {
     properties?: Record<string, any>;
     required?: string[];
   };
+}
+
+export interface MCPResource {
+  uri: string;
+  name: string;
+  description?: string;
+  mimeType?: string;
+}
+
+export interface MCPResourceContent {
+  uri: string;
+  mimeType: string;
+  text?: string;
 }

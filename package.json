@@ -27,8 +27,10 @@
     "test:watch:e2e": "jest --watch --testPathPatterns=\\.e2e\\.spec\\.ts$",
     "test:coverage": "jest --coverage --testPathPatterns=\\.spec\\.ts$ --testPathIgnorePatterns=\\.e2e\\.",
     "typecheck": "tsc --noEmit",
-    "ci": "npm run typecheck && npm run build && npm run test:unit && npm run test:coverage",
-    "ci:full": "npm run typecheck && npm run build && npm run test:coverage && npm run test:e2e"
+    "lint": "eslint 'src/**/*.ts' 'tests/**/*.ts'",
+    "lint:fix": "eslint 'src/**/*.ts' 'tests/**/*.ts' --fix",
+    "ci": "npm run typecheck && npm run lint && npm run build && npm run test:unit && npm run test:coverage",
+    "ci:full": "npm run typecheck && npm run lint && npm run build && npm run test:coverage && npm run test:e2e"
   },
   "keywords": [
     "signalk",
@@ -62,10 +64,14 @@
     "node": ">=18.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.30.0",
     "@jest/globals": "^30.0.2",
     "@types/dotenv": "^6.1.1",
     "@types/node": "^24.0.3",
     "@types/ws": "^8.18.1",
+    "@typescript-eslint/eslint-plugin": "^8.35.0",
+    "@typescript-eslint/parser": "^8.35.0",
+    "eslint": "^9.30.0",
     "jest": "^30.0.2",
     "ts-jest": "^29.4.0",
     "ts-node": "^10.9.2",

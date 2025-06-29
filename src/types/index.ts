@@ -1,6 +1,6 @@
 /**
  * Types Index
- * 
+ *
  * Single export point for all types and interfaces used throughout the application.
  * This allows for clean imports like: import { SignalKClientOptions, AISTarget } from '@/types'
  */
@@ -8,7 +8,7 @@
 // SignalK Protocol Types
 export * from './signalk';
 
-// Domain Interfaces  
+// Domain Interfaces
 export * from './interfaces';
 
 // MCP Protocol Types
@@ -41,4 +41,6 @@ export type {
   MCPServerInfo,
   MCPToolRequest,
   MCPServerCapabilities,
+  MCPResource,
+  MCPResourceContent,
 } from './mcp';

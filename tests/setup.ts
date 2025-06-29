@@ -1,6 +1,6 @@
 /**
  * Jest test setup file
- * 
+ *
  * This file runs before each test suite and provides:
  * - Global test utilities for unit tests
  * - Configure test environment
@@ -40,36 +40,44 @@ global.testUtils = {
     console.error = originalConsoleError;
     console.log = originalConsoleLog;
   },
-  
+
   // Mock console for tests that need to verify console output
   mockConsole: () => {
     console.error = jest.fn();
     console.log = jest.fn();
   },
-  
+
   // Create sample SignalK delta message
-  createSampleDelta: (context = 'vessels.self', path = 'navigation.position', value = { latitude: 37.8199, longitude: -122.4783 }) => ({
+  createSampleDelta: (
+    context = 'vessels.self',
+    path = 'navigation.position',
+    value = { latitude: 37.8199, longitude: -122.4783 },
+  ) => ({
     context,
-    updates: [{
-      timestamp: new Date().toISOString(),
-      source: { label: 'GPS1', type: 'NMEA0183' },
-      values: [{
-        path,
-        value
-      }]
-    }]
+    updates: [
+      {
+        timestamp: new Date().toISOString(),
+        source: { label: 'GPS1', type: 'NMEA0183' },
+        values: [
+          {
+            path,
+            value,
+          },
+        ],
+      },
+    ],
   }),
-  
+
   // Wait for async operations
-  waitFor: (ms = 100) => new Promise(resolve => setTimeout(resolve, ms)),
-  
+  waitFor: (ms = 100) => new Promise((resolve) => setTimeout(resolve, ms)),
+
   // Create mock WebSocket
   createMockWebSocket: () => ({
     on: jest.fn(),
     send: jest.fn(),
     close: jest.fn(),
-    readyState: 1 // WebSocket.OPEN
-  })
+    readyState: 1, // WebSocket.OPEN
+  }),
 };
 
 // Clean up after each test

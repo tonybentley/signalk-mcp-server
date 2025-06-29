@@ -1,0 +1,370 @@
+{
+  "description": "SignalK data model reference based on official specification",
+  "completeness": {
+    "status": "partial",
+    "note": "This reference covers the most common SignalK paths but is not exhaustive. The SignalK specification allows for custom paths and extensions beyond those documented here.",
+    "coverage": "Major groups and commonly used paths from SignalK 1.7.0 specification",
+    "missing_areas": [
+      "Custom vessel-specific paths",
+      "Manufacturer-specific extensions", 
+      "Regional or specialty equipment paths",
+      "Future specification additions"
+    ],
+    "dynamic_discovery": "For complete path discovery, use the list_available_paths() MCP tool to query the actual SignalK server"
+  },
+  "vessel_structure": {
+    "top_level_properties": {
+      "url": "Unique vessel URL identifier",
+      "mmsi": "Maritime Mobile Service Identity number",
+      "mothershipMmsi": "MMSI of mothership if applicable",
+      "uuid": "Universally unique identifier",
+      "name": "Vessel name",
+      "flag": "Flag state/country of registration",
+      "port": "Port of registry",
+      "registrations": "Official vessel registrations and documentation"
+    },
+    "major_groups": {
+      "navigation": "Position, heading, speed, course, GPS/GNSS data",
+      "electrical": "Batteries, solar, inverters, chargers, circuits",
+      "propulsion": "Engines, transmissions, fuel systems",
+      "environment": "Temperature, humidity, pressure, wind conditions",
+      "design": "Physical vessel specifications and dimensions",
+      "sensors": "Instrument configurations and metadata",
+      "steering": "Autopilot, rudder, wheel systems, navigation automation",
+      "tanks": "Fuel, fresh water, waste water, ballast",
+      "communication": "Radio, telephone, internet connectivity",
+      "sails": "Sailing equipment and configuration",
+      "performance": "Vessel performance metrics and calculations"
+    }
+  },
+  "navigation_paths": {
+    "position": "GPS coordinates as {latitude, longitude, altitude} object",
+    "speedOverGround": "Speed in m/s from GPS",
+    "speedThroughWater": "Vessel speed through water in m/s",
+    "courseOverGroundTrue": "True course in radians from GPS",
+    "courseOverGroundMagnetic": "Magnetic course in radians from GPS",
+    "headingTrue": "True heading in radians",
+    "headingMagnetic": "Magnetic heading in radians",
+    "magneticVariation": "Magnetic declination in radians",
+    "attitude": "Roll, pitch, yaw as {roll, pitch, yaw} object in radians",
+    "rateOfTurn": "Rate of turn in radians/second",
+    "state": "Navigation state (anchored, sailing, motoring, etc.)",
+    "datetime": "Current GPS time in RFC 3339 format",
+    "log": "Total distance traveled in meters",
+    "logTrip": "Trip distance since reset in meters",
+    "destination": {
+      "commonName": "Human readable destination name",
+      "position": "Destination coordinates {latitude, longitude}",
+      "eta": "Estimated time of arrival in RFC 3339 format"
+    },
+    "gnss": {
+      "methodQuality": "Fix quality (e.g., 'GNSS Fix', 'DGPS')",
+      "satellites": "Number of satellites in use",
+      "satellitesInView": "Detailed satellite information object",
+      "horizontalDilution": "GPS accuracy measure (lower is better)",
+      "positionDilution": "Position dilution of precision",
+      "antennaAltitude": "GPS antenna height above sea level in meters",
+      "geoidHeight": "Geoid height in meters",
+      "type": "GPS system type (e.g., 'GPS+SBAS/WAAS')",
+      "integrity": "Integrity checking status",
+      "differentialAge": "Age of differential corrections in seconds",
+      "differentialReference": "Differential reference station ID"
+    },
+    "racing": {
+      "source": "Source of racing data",
+      "boat": {
+        "relativeBearing": "Bearing to other boat in radians",
+        "distance": "Distance to other boat in meters"
+      }
+    },
+    "courseRhumbline": {
+      "description": "Rhumb line course calculations and route management",
+      "activeRoute": {
+        "href": "Reference to active route resource",
+        "estimatedTimeOfArrival": "ETA for entire route in RFC 3339 format",
+        "startTime": "Route activation time in RFC 3339 format"
+      },
+      "nextPoint": {
+        "distance": "Distance to next waypoint in meters",
+        "bearingTrue": "True bearing to next waypoint in radians",
+        "bearingMagnetic": "Magnetic bearing to next waypoint in radians",
+        "velocityMadeGood": "VMG towards next waypoint in m/s",
+        "timeToGo": "Estimated time to next waypoint in seconds",
+        "position": "Next waypoint coordinates {latitude, longitude}",
+        "estimatedTimeOfArrival": "ETA to next waypoint in RFC 3339 format"
+      },
+      "previousPoint": {
+        "distance": "Distance from previous waypoint in meters",
+        "position": "Previous waypoint coordinates {latitude, longitude}"
+      },
+      "bearingTrackTrue": "True bearing of track line in radians",
+      "bearingTrackMagnetic": "Magnetic bearing of track line in radians",
+      "crossTrackError": "Cross track error in meters (+ starboard, - port)"
+    },
+    "courseGreatCircle": {
+      "description": "Great circle course calculations and route management",
+      "activeRoute": "Same structure as courseRhumbline.activeRoute",
+      "nextPoint": "Same structure as courseRhumbline.nextPoint",
+      "previousPoint": "Same structure as courseRhumbline.previousPoint",
+      "bearingTrackTrue": "True bearing of great circle track in radians",
+      "bearingTrackMagnetic": "Magnetic bearing of great circle track in radians",
+      "crossTrackError": "Cross track error in meters (+ starboard, - port)"
+    }
+  },
+  "electrical_paths": {
+    "batteries": {
+      "pattern": "electrical.batteries.[id].*",
+      "description": "Each battery bank has unique identifier",
+      "common_ids": ["house", "starter", "main", "auxiliary"],
+      "properties": {
+        "voltage": "Battery voltage in volts",
+        "current": "Current flow in amperes (+ = charging, - = discharging)",
+        "power": "Power in watts (voltage × current)",
+        "capacity": {
+          "nominal": "Manufacturer specified capacity in Joules",
+          "actual": "Measured actual capacity in Joules",
+          "remaining": "Current remaining capacity in Joules",
+          "stateOfCharge": "Charge level 0-1 (0-100%)",
+          "timeRemaining": "Estimated time to empty in seconds",
+          "dischargeSinceFull": "Energy discharged since last full charge in Joules"
+        },
+        "stateOfHealth": "Battery health percentage 0-1 (0-100%)",
+        "chemistry": "Battery chemistry type (e.g. 'FLA', 'LiFePO4')",
+        "temperature": "Battery temperature in Kelvin",
+        "name": "Human readable battery name"
+      }
+    },
+    "solar": {
+      "pattern": "electrical.solar.[id].*",
+      "description": "Solar charge controllers",
+      "properties": {
+        "panelPower": "Solar panel output in watts",
+        "panelVoltage": "Panel voltage in volts",
+        "panelCurrent": "Panel current in amperes",
+        "current": "Charging current in amperes",
+        "voltage": "Output voltage in volts",
+        "controllerMode": "Solar controller state (e.g. 'off', 'MPPT', 'PWM')",
+        "yieldToday": "Energy generated today in Joules",
+        "yieldYesterday": "Energy generated yesterday in Joules",
+        "yieldTotal": "Total energy generated in Joules"
+      }
+    },
+    "inverters": {
+      "pattern": "electrical.inverters.[id].*",
+      "properties": {
+        "inverterMode": "Current operational mode (e.g. 'idle', 'inverting', 'charging')",
+        "dc": {
+          "voltage": "DC input voltage in volts",
+          "current": "DC input current in amperes",
+          "power": "DC input power in watts"
+        },
+        "ac": {
+          "voltage": "AC output voltage in volts",
+          "current": "AC output current in amperes",
+          "power": "AC output power in watts",
+          "frequency": "AC frequency in Hz"
+        }
+      }
+    },
+    "chargers": {
+      "pattern": "electrical.chargers.[id].*",
+      "properties": {
+        "chargingAlgorithm": "Charging method (e.g. 'two stage', 'three stage', 'constant current')",
+        "chargingMode": "Current charging state (e.g. 'bulk', 'absorption', 'float', 'equalize')",
+        "inputVoltage": "AC input voltage in volts",
+        "inputCurrent": "AC input current in amperes",
+        "outputVoltage": "DC output voltage in volts",
+        "outputCurrent": "DC charging current in amperes",
+        "outputPower": "DC charging power in watts"
+      }
+    },
+    "circuits": {
+      "pattern": "electrical.circuits.[id].*",
+      "description": "Individual electrical circuits and breakers",
+      "properties": {
+        "voltage": "Circuit voltage in volts",
+        "current": "Circuit current in amperes",
+        "power": "Circuit power in watts",
+        "switch": "Circuit breaker/switch state (on/off)",
+        "type": "Circuit type (e.g. 'ac', 'dc')"
+      }
+    }
+  },
+  "propulsion_paths": {
+    "pattern": "propulsion.[id].*",
+    "common_ids": ["main", "port", "starboard", "bow", "stern"],
+    "properties": {
+      "revolutions": "Engine RPM in Hz (revolutions per second)",
+      "state": "Engine state ('stopped', 'started', 'unusable')",
+      "runTime": "Total engine running time in seconds",
+      "engineLoad": "Engine load ratio 0-1 (0-100%)",
+      "exhaustTemperature": "Exhaust temperature in Kelvin",
+      "coolantTemperature": "Coolant temperature in Kelvin",
+      "temperature": "Engine temperature in Kelvin",
+      "oilPressure": "Oil pressure in Pascals",
+      "coolantPressure": "Coolant pressure in Pascals",
+      "fuel": {
+        "rate": "Fuel consumption rate in cubic meters per second",
+        "used": "Fuel used since reset in cubic meters",
+        "level": "Fuel level 0-1 (0-100%)"
+      },
+      "transmission": {
+        "gear": "Current gear selection",
+        "oilPressure": "Transmission oil pressure",
+        "oilTemperature": "Transmission oil temperature"
+      }
+    }
+  },
+  "environment_paths": {
+    "outside": {
+      "temperature": "Outside air temperature in Kelvin",
+      "humidity": "Relative humidity 0-1 (0-100%)",
+      "pressure": "Barometric pressure in Pascals"
+    },
+    "inside": {
+      "pattern": "environment.inside.[zone].*",
+      "zones": ["salon", "cabin", "engineRoom", "galley"],
+      "properties": {
+        "temperature": "Interior temperature in Kelvin",
+        "humidity": "Interior relative humidity 0-1",
+        "pressure": "Interior pressure in Pascals"
+      }
+    },
+    "water": {
+      "temperature": "Water temperature in Kelvin",
+      "salinity": "Water salinity"
+    },
+    "wind": {
+      "speedApparent": "Apparent wind speed in m/s",
+      "angleApparent": "Apparent wind angle in radians",
+      "speedTrue": "True wind speed in m/s",
+      "angleTrue": "True wind angle in radians"
+    }
+  },
+  "design_paths": {
+    "length": {"overall": "Length overall in meters"},
+    "beam": "Maximum beam in meters",
+    "draft": {"maximum": "Maximum draft in meters"},
+    "airHeight": "Height above waterline in meters",
+    "displacement": "Vessel displacement in kilograms",
+    "aisShipType": {
+      "id": "AIS ship type code (integer)",
+      "name": "Ship type description"
+    },
+    "rigging": {
+      "configuration": "Sail configuration type",
+      "masts": "Number and configuration of masts"
+    },
+    "keel": {
+      "type": "Keel type (fin, full, wing, etc.)",
+      "angle": "Keel angle in radians"
+    }
+  },
+  "tanks_paths": {
+    "pattern": "tanks.[type].[id].*",
+    "types": ["fuel", "freshWater", "wasteWater", "blackWater", "ballast", "gas", "liveWell", "baitWell", "lubrication"],
+    "properties": {
+      "currentLevel": "Current level 0-1 (0-100%)",
+      "currentVolume": "Current volume in cubic meters",
+      "capacity": "Total tank capacity in cubic meters",
+      "type": "Tank contents type",
+      "pressure": "Tank pressure in Pascals (especially for gas tanks)",
+      "temperature": "Tank temperature in Kelvin",
+      "viscosity": "Fluid viscosity in Pascal-seconds",
+      "extinguishant": "Fire extinguishing agent type"
+    }
+  },
+  "sails_paths": {
+    "pattern": "sails.[id].*",
+    "common_ids": ["main", "jib", "genoa", "spinnaker", "code0", "staysail"],
+    "properties": {
+      "area": "Sail area in square meters",
+      "minimumWind": "Minimum wind speed for sail in m/s",
+      "maximumWind": "Maximum wind speed for sail in m/s",
+      "furled": "Sail furled state (boolean)",
+      "reefed": "Reef configuration or percentage",
+      "name": "Human readable sail name"
+    },
+    "inventory": {
+      "pattern": "sails.inventory.*",
+      "description": "Complete sail inventory with specifications"
+    }
+  },
+  "sensors_paths": {
+    "ais": {
+      "class": "AIS transponder class (A or B)",
+      "fromBow": "Distance from AIS antenna to bow in meters",
+      "fromCenter": "Distance from centerline in meters (+ port, - starboard)",
+      "fromStern": "Distance from AIS antenna to stern in meters"
+    },
+    "gps": {
+      "pattern": "sensors.gps.[id].*",
+      "properties": {
+        "fromBow": "Distance from GPS antenna to bow in meters",
+        "fromCenter": "Distance from centerline in meters (+ port, - starboard)",
+        "type": "GPS receiver type and capabilities",
+        "methodQuality": "Current fix quality",
+        "satellites": "Number of satellites in use"
+      }
+    },
+    "wind": {
+      "pattern": "sensors.wind.[id].*",
+      "properties": {
+        "fromBow": "Distance from wind sensor to bow in meters",
+        "fromCenter": "Distance from centerline in meters",
+        "heightAboveWaterline": "Sensor height above waterline in meters"
+      }
+    }
+  },
+  "performance_paths": {
+    "velocityMadeGood": "VMG - velocity made good towards destination in m/s",
+    "velocityMadeGoodToWaypoint": "VMG to next waypoint in m/s",
+    "crossTrackError": "Cross track error in meters",
+    "bearingToWaypoint": "Bearing to next waypoint in radians",
+    "distanceToWaypoint": "Distance to next waypoint in meters",
+    "estimatedTimeOfArrival": "ETA to destination in RFC 3339 format",
+    "leeway": "Leeway angle in radians",
+    "polarSpeed": "Theoretical hull speed for current conditions in m/s",
+    "polarSpeedRatio": "Actual speed vs theoretical speed ratio",
+    "tackMagnetic": "Magnetic tack angle in radians",
+    "tackTrue": "True tack angle in radians",
+    "beatAngle": "Optimal beating angle in radians",
+    "gybeAngle": "Optimal gybing angle in radians"
+  },
+  "steering_paths": {
+    "autopilot": {
+      "pattern": "steering.autopilot.*",
+      "description": "Autopilot system control and status",
+      "properties": {
+        "state": "Current autopilot state (auto, standby, alarm, noDrift, wind, depthContour, route, directControl)",
+        "mode": "Autopilot operating mode (powersave, normal, accurate)",
+        "target": {
+          "windAngleApparent": "Target apparent wind angle in radians",
+          "windAngleTrue": "Target true wind angle in radians", 
+          "headingTrue": "Target true heading in radians",
+          "headingMagnetic": "Target magnetic heading in radians"
+        },
+        "deadZone": "Autopilot dead zone in radians",
+        "backlash": "Steering system backlash compensation",
+        "gain": "Autopilot gain setting",
+        "maxDriveCurrent": "Maximum drive current in amperes",
+        "maxDriveRate": "Maximum drive rate in radians/second"
+      }
+    },
+    "rudder": {
+      "pattern": "steering.rudder.*",
+      "properties": {
+        "angle": "Current rudder angle in radians (+ starboard, - port)",
+        "angleTarget": "Target rudder angle in radians",
+        "portLock": "Port rudder lock angle in radians",
+        "starboardLock": "Starboard rudder lock angle in radians"
+      }
+    }
+  },
+  "common_patterns": {
+    "multiple_instances": "Many paths support multiple instances with unique identifiers",
+    "device_organization": "Electrical items organized by device (batteries.main, solar.1)",
+    "location_zones": "Environmental data often organized by location/zone",
+    "metadata_support": "All values can include metadata for units, ranges, alarms"
+  }
+}

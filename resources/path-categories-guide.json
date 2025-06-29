@@ -1,0 +1,144 @@
+{
+  "title": "SignalK Path Categories Guide",
+  "description": "Understanding path organization - SignalK paths follow a hierarchical structure. This guide helps categorize paths for dynamic discovery.",
+  "primary_categories": {
+    "navigation": {
+      "description": "Core vessel movement and positioning data",
+      "paths": [
+        "navigation.position - GPS coordinates",
+        "navigation.speedOverGround - GPS speed",
+        "navigation.courseOverGroundTrue - GPS course",
+        "navigation.headingTrue - Compass heading (true)",
+        "navigation.headingMagnetic - Compass heading (magnetic)",
+        "navigation.attitude - Roll, pitch, yaw",
+        "navigation.rateOfTurn - Rate of turn",
+        "navigation.state - Navigation state",
+        "navigation.gnss.* - GPS/GNSS specific data",
+        "navigation.magneticVariation - Local magnetic declination"
+      ]
+    },
+    "electrical": {
+      "description": "Power generation, storage, and distribution",
+      "paths": [
+        "electrical.batteries.[id].* - Battery monitoring",
+        "electrical.solar.[id].* - Solar charge controllers",
+        "electrical.inverters.[id].* - DC to AC inverters",
+        "electrical.chargers.[id].* - Battery chargers",
+        "electrical.alternators.[id].* - Engine alternators",
+        "electrical.circuits.[id].* - Electrical circuits/breakers"
+      ]
+    },
+    "propulsion": {
+      "description": "Engine and drive systems",
+      "paths": [
+        "propulsion.[id].revolutions - Engine RPM",
+        "propulsion.[id].temperature - Engine temperature",
+        "propulsion.[id].oilPressure - Oil pressure",
+        "propulsion.[id].fuel.* - Fuel consumption and levels",
+        "propulsion.[id].transmission.* - Transmission data"
+      ]
+    },
+    "environment": {
+      "description": "Environmental conditions and monitoring",
+      "paths": [
+        "environment.outside.* - External conditions",
+        "environment.inside.* - Internal conditions",
+        "environment.water.* - Water conditions",
+        "environment.wind.* - Wind data",
+        "environment.[zone].* - Zone-specific monitoring"
+      ]
+    },
+    "design": {
+      "description": "Static vessel specifications",
+      "paths": [
+        "design.length - Vessel dimensions",
+        "design.beam - Beam width",
+        "design.draft - Draft depth",
+        "design.displacement - Vessel weight",
+        "design.aisShipType - Vessel type classification"
+      ]
+    },
+    "sensors": {
+      "description": "Instrument configuration and metadata",
+      "paths": [
+        "sensors.ais.* - AIS transponder configuration",
+        "sensors.gps.* - GPS receiver configuration",
+        "sensors.[type].* - Other sensor configurations"
+      ]
+    },
+    "steering": {
+      "description": "Steering and autopilot systems",
+      "paths": [
+        "steering.rudderAngle - Rudder position",
+        "steering.autopilot.* - Autopilot status and settings"
+      ]
+    },
+    "tanks": {
+      "description": "Fluid storage and monitoring",
+      "paths": [
+        "tanks.fuel.[id].* - Fuel tanks",
+        "tanks.freshWater.[id].* - Fresh water tanks",
+        "tanks.wasteWater.[id].* - Waste water tanks"
+      ]
+    },
+    "communication": {
+      "description": "Communication systems",
+      "paths": [
+        "communication.callsignVhf - VHF call sign",
+        "communication.phoneNumber - Phone contact",
+        "communication.email - Email contact"
+      ]
+    }
+  },
+  "categorization_logic": {
+    "description": "JavaScript function to categorize SignalK paths",
+    "function": "function categorizePath(path) {\n  if (path.startsWith('navigation.')) return 'navigation';\n  if (path.startsWith('electrical.')) return 'electrical';\n  if (path.startsWith('propulsion.')) return 'propulsion';\n  if (path.startsWith('environment.')) return 'environment';\n  if (path.startsWith('design.')) return 'design';\n  if (path.startsWith('sensors.')) return 'sensors';\n  if (path.startsWith('steering.')) return 'steering';\n  if (path.startsWith('tanks.')) return 'tanks';\n  if (path.startsWith('communication.')) return 'communication';\n  return 'other';\n}"
+  },
+  "importance_levels": {
+    "critical": ["navigation.position", "navigation.gnss.*", "electrical.batteries.*"],
+    "important": ["navigation.heading*", "navigation.speed*", "electrical.solar.*"],
+    "monitoring": ["environment.*", "tanks.*", "propulsion.*"],
+    "configuration": ["design.*", "sensors.*", "communication.*"]
+  },
+  "update_frequency": {
+    "dynamic": {
+      "description": "Frequently changing",
+      "examples": ["navigation.*", "electrical.batteries.*.current"]
+    },
+    "semi_dynamic": {
+      "description": "Occasionally changing",
+      "examples": ["environment.*", "tanks.*"]
+    },
+    "static": {
+      "description": "Rarely changing",
+      "examples": ["design.*", "sensors.*", "communication.*"]
+    }
+  },
+  "common_patterns": {
+    "multiple_instances": {
+      "description": "Many categories support multiple instances",
+      "examples": [
+        "electrical.batteries.main.* and electrical.batteries.auxiliary.*",
+        "propulsion.port.* and propulsion.starboard.*",
+        "tanks.fuel.main.* and tanks.fuel.reserve.*"
+      ]
+    },
+    "nested_structures": {
+      "description": "Some paths have deep hierarchies",
+      "examples": [
+        "electrical.batteries.[id].capacity.stateOfCharge",
+        "navigation.gnss.satellitesInView.satellites",
+        "propulsion.[id].transmission.oilPressure"
+      ]
+    },
+    "metadata_paths": {
+      "description": "All data paths can have associated metadata",
+      "examples": [
+        "[path].meta.units - Unit information",
+        "[path].meta.description - Human readable description",
+        "[path].meta.zones - Alarm/warning zones"
+      ]
+    }
+  },
+  "usage_note": "This categorization helps dynamic resource generation by grouping related paths and understanding the relative importance and update frequency of different data types."
+}

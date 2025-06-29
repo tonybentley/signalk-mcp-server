@@ -80,20 +80,22 @@ SIGNALK_HOST=myboat.signalk.io
 SIGNALK_PORT=443
 SIGNALK_TLS=true
 
-## MCP TOOLS TO IMPLEMENT
-1. get_vessel_state() -> Returns current position, heading, speed, wind data
-2. get_ais_targets() -> Returns nearby vessels from AIS with position/course/speed
-3. get_active_alarms() -> Returns current system notifications and alerts
-4. list_available_paths() -> Discovers what SignalK data paths are available
-5. subscribe_to_paths(paths[]) -> Subscribe to live updates from multiple paths
+## MCP TOOLS IMPLEMENTED
+1. get_initial_context() -> **Start here!** Returns comprehensive SignalK documentation and context for AI agents
+2. get_vessel_state() -> Returns current position, heading, speed, wind data, and vessel identity (name, MMSI)
+3. get_ais_targets() -> Returns nearby vessels from AIS with position/course/speed
+4. get_active_alarms() -> Returns current system notifications and alerts
+5. list_available_paths() -> Discovers what SignalK data paths are available
 6. get_path_value(path) -> Get latest value for any specific SignalK path
 7. get_connection_status() -> Returns WebSocket connection state and health
 
-## MCP RESOURCES TO EXPOSE
-- signalk://navigation -> Vessel navigation data
-- signalk://ais -> AIS target information  
-- signalk://alarms -> System notifications
-- signalk://subscription -> Live data stream status
+**Note**: All tools are implemented and available. The actual tool names in the MCP server match these descriptions exactly.
+
+## MCP RESOURCES AVAILABLE
+- signalk://signalk_overview -> SignalK overview and core concepts
+- signalk://data_model_reference -> Comprehensive SignalK data model reference
+- signalk://path_categories_guide -> Guide to understanding SignalK paths
+- signalk://mcp_tool_reference -> Reference for available MCP tools and usage patterns
 
 ## SIGNALK DELTA MESSAGE STRUCTURE
 {
@@ -109,10 +111,15 @@ SIGNALK_TLS=true
 }
 
 ## MODULE STRUCTURE
-server.js                    # Main entry point and MCP server setup
-src/signalk-client.js        # WebSocket client with reconnection logic
-src/tool-handler.js          # MCP tool function implementations
-src/resource-handler.js      # MCP resource management and delta processing
+src/index.ts                 # Main entry point and MCP server setup
+src/signalk-client.ts        # WebSocket client with reconnection logic and vessel identity retrieval
+src/signalk-mcp-server.ts    # MCP server implementation with tools and resources
+src/types/                   # TypeScript type definitions
+  ├── index.ts
+  ├── interfaces.ts
+  ├── mcp.ts
+  └── signalk.ts
+resources/                   # Static reference resources (JSON files)
 
 ## KEY DESIGN PRINCIPLES
 - Read-only operations for safety
@@ -122,6 +129,9 @@ src/resource-handler.js      # MCP resource management and delta processing
 - Configurable via environment variables
 - Minimal dependencies for easy deployment
 - Focus on providing basic situational awareness to AI agents
+- Vessel identity retrieval from top-level SignalK properties (name, MMSI)
+- HTTP API fallback for robust data access
+- Node.js 18+ required for native fetch support
 
 ## SUCCESS CRITERIA
 - AI agent can get current vessel position and heading
@@ -134,10 +144,12 @@ src/resource-handler.js      # MCP resource management and delta processing
 
 ## Development Commands
 
-### Build & Type Checking
+### Build, Type Checking & Linting
 ```bash
 npm run build          # Compile TypeScript to JavaScript
 npm run typecheck      # Type check without emitting files
+npm run lint           # Check code quality with ESLint
+npm run lint:fix       # Auto-fix ESLint issues (preserves code style)
 ```
 
 ### Testing Strategy
@@ -152,7 +164,7 @@ npm run test:e2e       # Run all integration tests
 npm run test:watch:e2e # Run integration tests in watch mode
 
 # Individual Integration Tests (for focused testing)
-npx jest tests/signalk-client-vessel-state.e2e.spec.ts      # Test getVesselState()
+npx jest tests/signalk-client-vessel-state.e2e.spec.ts      # Test getVesselStateWithIdentity()
 npx jest tests/signalk-client-ais-targets.e2e.spec.ts       # Test getAISTargets()
 npx jest tests/signalk-client-available-paths.e2e.spec.ts   # Test listAvailablePaths()
 
@@ -185,7 +197,7 @@ npm run test:all       # Run both unit and integration tests
 
 2. **Specific Integration Test** (validates against live server):
    ```bash
-   # For getVesselState() changes:
+   # For getVesselStateWithIdentity() changes:
    npx jest tests/signalk-client-vessel-state.e2e.spec.ts
    
    # For getAISTargets() changes:
@@ -209,8 +221,8 @@ npm run start:prod     # Production server
 
 ### CI/CD Pipeline
 ```bash
-npm run ci             # Full CI pipeline: typecheck → build → unit tests → coverage
-npm run ci:full        # Extended CI: typecheck → build → all tests → coverage
+npm run ci             # Full CI pipeline: typecheck → lint → build → unit tests → coverage
+npm run ci:full        # Extended CI: typecheck → lint → build → all tests → coverage
 ```
 
 ## Project Structure
@@ -248,6 +260,7 @@ dist/                           # Compiled JavaScript output
 
 ### Core Method Coverage
 - `getVesselState()`: Dynamic vessel data retrieval
+- `getVesselStateWithIdentity()`: Vessel data with identity (name, MMSI) from top-level SignalK properties
 - `getAISTargets()`: True AIS target detection (MMSI-based)
 - `listAvailablePaths()`: HTTP API with WebSocket fallback
 - `getActiveAlarms()`: System notifications and alerts
@@ -255,6 +268,11 @@ dist/                           # Compiled JavaScript output
 - `getConnectionStatus()`: Connection health monitoring
 
 ## Notes
+
+### Vessel Identity Implementation
+- Vessel name and MMSI retrieved from top-level SignalK properties via HTTP API
+- Combined with delta message data for complete vessel state
+- `getVesselStateWithIdentity()` method provides comprehensive vessel information
 
 ### AIS Target Implementation
 - Only vessels with MMSI format (`urn:mrn:imo:mmsi:XXXXXXXXX`) are AIS targets
@@ -271,3 +289,4 @@ dist/                           # Compiled JavaScript output
 - Integration tests fail fast if no live server connection
 - Graceful fallback from HTTP to WebSocket for path discovery
 - Comprehensive edge case testing in unit tests
+- Node.js 18+ required for native fetch support

@@ -11,7 +11,7 @@ import type {
   ActiveAlarmsResponse,
   ConnectionStatus,
   AvailablePathsResponse,
-  PathValueResponse
+  PathValueResponse,
 } from './types/index.js';
 
 export class SignalKClient extends EventEmitter {
@@ -29,10 +29,10 @@ export class SignalKClient extends EventEmitter {
 
   constructor(options: SignalKClientOptions = {}) {
     super();
-    
+
     // Set SignalK connection configuration directly from environment variables
     this.setSignalKConfig(options);
-    
+
     this.client = new Client({
       hostname: this.hostname,
       port: this.port,
@@ -52,45 +52,48 @@ export class SignalKClient extends EventEmitter {
               period: 1000,
               format: 'delta',
               policy: 'ideal',
-              minPeriod: 200
-            }
-          ]
-        }
-      ]
+              minPeriod: 200,
+            },
+          ],
+        },
+      ],
     });
-    
-    this.context = options.context || process.env.SIGNALK_CONTEXT || 'vessels.self';
+
+    this.context =
+      options.context || process.env.SIGNALK_CONTEXT || 'vessels.self';
     this.connected = false;
     this.latestValues = new Map();
     this.availablePaths = new Set();
     this.aisTargets = new Map();
     this.activeAlarms = new Map();
-    
+
     this.setupEventHandlers();
   }
 
   /**
    * Set SignalK connection configuration from environment variables with sensible defaults
-   * 
+   *
    * Environment Variables:
    * - SIGNALK_HOST: Hostname/IP (default: 'localhost')
    * - SIGNALK_PORT: Port number (default: 3000)
    * - SIGNALK_TLS: Use secure connections - true/false (default: false)
-   * 
+   *
    * Sets instance properties:
    * - hostname: The server hostname/IP (e.g., 'localhost', '192.168.1.100')
    * - port: The server port (e.g., 3000, 443, 80)
    * - useTLS: Whether to use secure connections (WSS/HTTPS vs WS/HTTP)
-   * 
+   *
    * @param options - Override options
    */
   setSignalKConfig(options: SignalKClientOptions = {}): void {
     // Set configuration directly from environment variables with defaults
     this.hostname = options.hostname || process.env.SIGNALK_HOST || 'localhost';
-    const portValue = parseInt(String(options.port || process.env.SIGNALK_PORT || '3000'));
+    const portValue = parseInt(
+      String(options.port || process.env.SIGNALK_PORT || '3000'),
+    );
     this.port = isNaN(portValue) ? 3000 : portValue;
     this.useTLS = options.useTLS || process.env.SIGNALK_TLS === 'true' || false;
-    
+
     // Build original URL for display purposes
     const protocol = this.useTLS ? 'wss://' : 'ws://';
     this.originalUrl = `${protocol}${this.hostname}:${this.port}`;
@@ -102,7 +105,7 @@ export class SignalKClient extends EventEmitter {
    */
   buildWebSocketUrl(): string {
     const protocol = this.useTLS ? 'wss:' : 'ws:';
-    const port = (this.port === (this.useTLS ? 443 : 80)) ? '' : `:${this.port}`;
+    const port = this.port === (this.useTLS ? 443 : 80) ? '' : `:${this.port}`;
     return `${protocol}//${this.hostname}${port}`;
   }
 
@@ -112,7 +115,7 @@ export class SignalKClient extends EventEmitter {
    */
   buildHttpUrl(): string {
     const protocol = this.useTLS ? 'https:' : 'http:';
-    const port = (this.port === (this.useTLS ? 443 : 80)) ? '' : `:${this.port}`;
+    const port = this.port === (this.useTLS ? 443 : 80) ? '' : `:${this.port}`;
     return `${protocol}//${this.hostname}${port}`;
   }
 
@@ -130,13 +133,13 @@ export class SignalKClient extends EventEmitter {
 
   /**
    * Sets up WebSocket event handlers for connection, disconnection, errors, and delta messages
-   * 
+   *
    * Event handlers:
    * - 'connect': Sets connected flag and emits 'connected' event
-   * - 'disconnect': Clears connected flag and emits 'disconnected' event  
+   * - 'disconnect': Clears connected flag and emits 'disconnected' event
    * - 'error': Logs errors and emits 'error' event
    * - 'delta': Processes incoming SignalK delta messages with vessel data updates
-   * 
+   *
    * @example
    * const client = new SignalKClient();
    * client.on('connected', () => console.log('Connected to SignalK'));
@@ -165,19 +168,18 @@ export class SignalKClient extends EventEmitter {
     });
   }
 
-
   /**
    * Establishes WebSocket connection to SignalK server with timeout handling
-   * 
+   *
    * Features:
    * - Promise-based connection with 10-second timeout
    * - Prevents duplicate connections if already connected
    * - Automatic error handling and cleanup
    * - Subscribes to all vessel data paths upon connection
    * - Fetches initial complete vessel state via HTTP after connection
-   * 
+   *
    * @returns Promise that resolves when connected or rejects on error/timeout
-   * 
+   *
    * @example
    * const client = new SignalKClient({ hostname: 'localhost', port: 3000 });
    * try {
@@ -200,7 +202,7 @@ export class SignalKClient extends EventEmitter {
 
       this.client.once('connect', async () => {
         clearTimeout(timeout);
-        
+
         // Fetch initial vessel state to populate cache immediately
         try {
           await this.fetchInitialVesselState();
@@ -208,7 +210,7 @@ export class SignalKClient extends EventEmitter {
           console.error('Failed to fetch initial vessel state:', error);
           // Don't fail connection if HTTP fetch fails - WebSocket deltas will populate data
         }
-        
+
         resolve();
       });
 
@@ -223,78 +225,89 @@ export class SignalKClient extends EventEmitter {
 
   /**
    * Fetches initial complete vessel state via HTTP API to populate cache immediately
-   * 
+   *
    * This method is called after WebSocket connection to ensure getVesselState()
    * has immediate access to complete vessel data instead of waiting for deltas.
-   * 
+   *
    * Features:
    * - HTTP GET to /signalk/v1/api/vessels/self for complete state
    * - Populates latestValues Map with all available paths
    * - Preserves current timestamp for each value
    * - Updates availablePaths Set automatically
    * - Graceful error handling - logs errors but doesn't throw
-   * 
+   *
    * @returns Promise that resolves when initial state is fetched and cached
-   * 
+   *
    * @private
    */
   private async fetchInitialVesselState(): Promise<void> {
     try {
       const apiUrl = this.buildRestApiUrl('self');
       const response = await fetch(apiUrl);
-      
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      
+
       const data = await response.json();
-      
+
       // Recursively populate latestValues Map from the HTTP response
       this.populateLatestValuesFromData(data, this.context);
-      
     } catch (error: any) {
-      console.error('Failed to fetch initial vessel state via HTTP:', error.message);
+      console.error(
+        'Failed to fetch initial vessel state via HTTP:',
+        error.message,
+      );
       throw error; // Re-throw to be caught in connect() method
     }
   }
 
   /**
    * Recursively populates latestValues Map from SignalK API response data
-   * 
+   *
    * This helper method traverses the nested SignalK data structure and
    * extracts all value objects, storing them in the latestValues Map
    * with proper full path keys (context.path).
-   * 
+   *
    * @param obj - The SignalK data object to traverse
    * @param context - The vessel context (e.g., 'vessels.self')
    * @param pathPrefix - Current path prefix being built
-   * 
+   *
    * @private
    */
-  private populateLatestValuesFromData(obj: any, context: string, pathPrefix = ''): void {
+  private populateLatestValuesFromData(
+    obj: any,
+    context: string,
+    pathPrefix = '',
+  ): void {
     if (!obj || typeof obj !== 'object') {
       return;
     }
-    
+
     for (const [key, value] of Object.entries(obj)) {
       // Skip metadata fields and null/undefined keys
-      if (!key || key.startsWith('$') || key === 'meta' || key === 'timestamp') {
+      if (
+        !key ||
+        key.startsWith('$') ||
+        key === 'meta' ||
+        key === 'timestamp'
+      ) {
         continue;
       }
-      
+
       const currentPath = pathPrefix ? `${pathPrefix}.${key}` : key;
-      
+
       // If this object has a 'value' property, it's a SignalK data point
       if (value && typeof value === 'object' && 'value' in value) {
         const fullPath = `${context}.${currentPath}`;
-        
+
         // Store in latestValues Map with SignalK structure
         this.latestValues.set(fullPath, {
           value: (value as any).value,
           timestamp: (value as any).timestamp || new Date().toISOString(),
-          source: (value as any).source
+          source: (value as any).source,
         });
-        
+
         // Add to available paths (only if currentPath is valid)
         if (currentPath && currentPath !== 'undefined') {
           this.availablePaths.add(currentPath);
@@ -309,16 +322,16 @@ export class SignalKClient extends EventEmitter {
 
   /**
    * Processes incoming SignalK delta messages and updates internal data stores
-   * 
+   *
    * Delta message processing:
    * - Updates latest values cache with timestamps
    * - Tracks AIS targets from other vessels
    * - Monitors system notifications and alarms
    * - Discovers available data paths automatically
    * - Emits 'delta' event for external listeners
-   * 
+   *
    * @param delta - SignalK delta message with vessel updates
-   * 
+   *
    * @example
    * // Delta messages are received automatically via WebSocket
    * client.on('delta', (delta) => {
@@ -339,16 +352,16 @@ export class SignalKClient extends EventEmitter {
 
   /**
    * Processes individual value updates from SignalK delta messages
-   * 
+   *
    * Update processing:
    * - Stores latest values with full path keys (context.path)
    * - Maintains set of available data paths
    * - Updates AIS target data for other vessels
    * - Processes notification/alarm state changes
    * - Preserves timestamps and source information
-   * 
+   *
    * @param message - SignalK delta message containing updates array
-   * 
+   *
    * @example
    * // Updates are processed automatically from delta messages:
    * // {
@@ -364,24 +377,29 @@ export class SignalKClient extends EventEmitter {
    */
   processUpdates(message: SignalKDelta): void {
     const context = message.context || this.context;
-    
-    message.updates.forEach(update => {
+
+    message.updates.forEach((update) => {
       if (update.values) {
-        update.values.forEach(value => {
+        update.values.forEach((value) => {
           const fullPath = `${context}.${value.path}`;
-          
+
           this.latestValues.set(fullPath, {
             value: value.value,
             timestamp: update.timestamp || new Date().toISOString(),
-            source: update.source
+            source: update.source,
           });
-          
+
           this.availablePaths.add(value.path);
-          
+
           if (context.startsWith('vessels.') && context !== this.context) {
-            this.updateAISTarget(context, value.path, value.value, update.timestamp);
+            this.updateAISTarget(
+              context,
+              value.path,
+              value.value,
+              update.timestamp,
+            );
           }
-          
+
           if (value.path.startsWith('notifications.')) {
             this.updateAlarms(value.path, value.value, update.timestamp);
           }
@@ -392,28 +410,33 @@ export class SignalKClient extends EventEmitter {
 
   /**
    * Updates AIS target information for other vessels detected in the area
-   * 
+   *
    * AIS data tracking:
    * - Creates new target entries for unknown vessels
    * - Updates existing targets with latest position/course/speed data
    * - Maintains MMSI identifier and last update timestamp
    * - Supports any SignalK path (position, course, speed, name, etc.)
-   * 
+   *
    * @param vesselContext - Vessel context (e.g., 'vessels.urn:mrn:imo:mmsi:123456789')
    * @param path - SignalK data path (e.g., 'navigation.position')
    * @param value - The data value for this path
    * @param timestamp - ISO timestamp of the update
-   * 
+   *
    * @example
    * // AIS targets are updated automatically from delta messages:
    * // Context: "vessels.urn:mrn:imo:mmsi:123456789"
    * // Path: "navigation.position"
    * // Value: {"latitude": 37.8200, "longitude": -122.4800}
-   * 
+   *
    * const targets = client.getAISTargets();
    * console.log('Nearby vessels:', targets.targets.length);
    */
-  updateAISTarget(vesselContext: string, path: string, value: any, timestamp: string): void {
+  updateAISTarget(
+    vesselContext: string,
+    path: string,
+    value: any,
+    timestamp: string,
+  ): void {
     // Only process vessels with proper MMSI format (AIS targets)
     // Example: "vessels.urn:mrn:imo:mmsi:123456789"
     const mmsiMatch = vesselContext.match(/urn:mrn:imo:mmsi:(\d+)/);
@@ -421,17 +444,17 @@ export class SignalKClient extends EventEmitter {
       // Skip non-MMSI vessels (UUID-based vessels, other formats)
       return;
     }
-    
+
     const mmsi = mmsiMatch[1]; // Extract the MMSI number
     const vesselId = vesselContext.replace('vessels.', '');
-    
+
     if (!this.aisTargets.has(vesselId)) {
       this.aisTargets.set(vesselId, {
         mmsi: mmsi, // Use the extracted MMSI number
-        lastUpdate: timestamp
+        lastUpdate: timestamp,
       });
     }
-    
+
     const target = this.aisTargets.get(vesselId);
     if (target) {
       target[path] = value;
@@ -441,17 +464,17 @@ export class SignalKClient extends EventEmitter {
 
   /**
    * Updates active alarm and notification states from SignalK notification paths
-   * 
+   *
    * Alarm processing:
    * - Adds alarms when state is not 'normal' (alert, warn, alarm, emergency)
    * - Removes alarms when state returns to 'normal' or null
    * - Preserves alarm message and metadata
    * - Tracks timestamp of alarm state changes
-   * 
+   *
    * @param path - Notification path (e.g., 'notifications.engines.temperature')
    * @param value - Notification object with state and message
    * @param timestamp - ISO timestamp of the notification
-   * 
+   *
    * @example
    * // Alarms are updated automatically from notification paths:
    * // Path: "notifications.engines.temperature"
@@ -460,7 +483,7 @@ export class SignalKClient extends EventEmitter {
    * //   "message": "Engine temperature high",
    * //   "method": ["visual", "sound"]
    * // }
-   * 
+   *
    * const alarms = client.getActiveAlarms();
    * console.log('Active alarms:', alarms.count);
    */
@@ -470,7 +493,7 @@ export class SignalKClient extends EventEmitter {
         path,
         state: value.state,
         message: value.message,
-        timestamp
+        timestamp,
       });
     } else if (value === null || value === undefined) {
       // Only delete if value is truly null/undefined (path no longer exists)
@@ -479,25 +502,24 @@ export class SignalKClient extends EventEmitter {
     // Keep alarms in normal state - do not delete them
   }
 
-
   /**
    * Returns current vessel state with all available sensor data and navigation information
-   * 
+   *
    * Vessel state includes:
    * - All SignalK paths for the current vessel context (vessels.self by default)
    * - Position, heading, speed, wind, engine data, etc.
    * - Latest values with timestamps and source information
    * - Connection status and context information
-   * 
+   *
    * @returns VesselState object with dynamic data structure based on available sensors
-   * 
+   *
    * @example
    * const state = client.getVesselState();
    * console.log('Position:', state.data['navigation.position']);
    * console.log('Speed:', state.data['navigation.speedOverGround']);
    * console.log('Wind:', state.data['environment.wind']);
    * console.log('Connected:', state.connected);
-   * 
+   *
    * // Example response:
    * // {
    * //   "connected": true,
@@ -518,44 +540,95 @@ export class SignalKClient extends EventEmitter {
    */
   getVesselState(): VesselState {
     const state: any = {};
-    
+
     // Dynamically get all available paths for this vessel context
-    Array.from(this.latestValues.entries()).forEach(([fullPath, signalKValue]) => {
-      // Only include paths for the current vessel context
-      if (fullPath.startsWith(this.context + '.')) {
-        // Extract the path without the context prefix
-        const path = fullPath.substring(this.context.length + 1);
-        
-        // Safety check: ensure path is valid
-        if (path && path !== 'undefined' && typeof path === 'string') {
-          state[path] = signalKValue;
+    Array.from(this.latestValues.entries()).forEach(
+      ([fullPath, signalKValue]) => {
+        // Only include paths for the current vessel context
+        if (fullPath.startsWith(this.context + '.')) {
+          // Extract the path without the context prefix
+          const path = fullPath.substring(this.context.length + 1);
+
+          // Safety check: ensure path is valid
+          if (path && path !== 'undefined' && typeof path === 'string') {
+            state[path] = signalKValue;
+          }
         }
-      }
-    });
+      },
+    );
 
     return {
       connected: this.connected,
       context: this.context,
       data: state,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Returns vessel state enriched with identity information from the vessel object
+   */
+  async getVesselStateWithIdentity(): Promise<VesselState> {
+    const baseState = this.getVesselState();
+    const state = { ...baseState.data };
+
+    // Add top-level vessel identity data that doesn't come through delta messages
+    try {
+      const apiUrl = this.buildRestApiUrl('self');
+      const response = await fetch(apiUrl);
+      if (response.ok) {
+        const vesselData = await response.json();
+
+        // Add top-level vessel properties as synthetic paths
+        if (vesselData.name) {
+          state['name'] = {
+            value: vesselData.name,
+            timestamp: new Date().toISOString(),
+            source: 'vessel-identity',
+          };
+        }
+        if (vesselData.mmsi) {
+          state['mmsi'] = {
+            value: vesselData.mmsi,
+            timestamp: new Date().toISOString(),
+            source: 'vessel-identity',
+          };
+        }
+        if (vesselData.communication?.callsignVhf) {
+          state['communication.callsignVhf'] = {
+            value: vesselData.communication.callsignVhf,
+            timestamp: new Date().toISOString(),
+            source: 'vessel-identity',
+          };
+        }
+      }
+    } catch (error) {
+      // Silently fail - vessel identity is nice to have but not critical
+    }
+
+    return {
+      connected: this.connected,
+      context: this.context,
+      data: state,
+      timestamp: new Date().toISOString(),
     };
   }
 
   /**
    * Returns nearby AIS targets (other vessels) with their position and navigation data
-   * 
+   *
    * AIS target filtering:
    * - Only includes targets updated within last 5 minutes
    * - Limits results to 50 targets to prevent overwhelming responses
    * - Includes MMSI, position, course, speed, vessel name if available
    * - Automatically removes stale targets
-   * 
+   *
    * @returns AISTargetsResponse with array of nearby vessels
-   * 
+   *
    * @example
    * const targets = client.getAISTargets();
    * console.log(`Found ${targets.count} nearby vessels`);
-   * 
+   *
    * targets.targets.forEach(target => {
    *   console.log(`MMSI: ${target.mmsi}`);
    *   if (target['navigation.position']) {
@@ -565,7 +638,7 @@ export class SignalKClient extends EventEmitter {
    *     console.log(`Course: ${target['navigation.courseOverGround']}°`);
    *   }
    * });
-   * 
+   *
    * // Example response:
    * // {
    * //   "connected": true,
@@ -584,7 +657,7 @@ export class SignalKClient extends EventEmitter {
    */
   getAISTargets(): AISTargetsResponse {
     const targets = Array.from(this.aisTargets.values())
-      .filter(target => {
+      .filter((target) => {
         const age = Date.now() - new Date(target.lastUpdate).getTime();
         return age < 300000; // 5 minutes
       })
@@ -594,41 +667,41 @@ export class SignalKClient extends EventEmitter {
       connected: this.connected,
       count: targets.length,
       targets,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
   }
 
   /**
    * Returns all alarms and system notifications including resolved (normal state) alarms
-   * 
+   *
    * Alarm states:
    * - 'alert': General warning condition
    * - 'warn': Warning that requires attention
    * - 'alarm': Alarm condition requiring immediate attention
    * - 'emergency': Emergency condition requiring immediate action
    * - 'normal': Previously active alarm now resolved (provides audit trail)
-   * 
+   *
    * Note: This method now includes alarms in 'normal' state to provide complete
    * alarm history and audit trail. Use filtering if you need only critical alarms.
-   * 
+   *
    * @returns ActiveAlarmsResponse with array of all notifications (including normal)
-   * 
+   *
    * @example
    * const alarms = client.getActiveAlarms();
    * console.log(`${alarms.count} total alarms (including resolved)`);
-   * 
+   *
    * // Filter for only critical alarms
-   * const criticalAlarms = alarms.alarms.filter(alarm => 
+   * const criticalAlarms = alarms.alarms.filter(alarm =>
    *   alarm.state !== 'normal'
    * );
    * console.log(`${criticalAlarms.length} critical alarms`);
-   * 
+   *
    * alarms.alarms.forEach(alarm => {
    *   console.log(`${alarm.state}: ${alarm.message || 'No message'}`);
    *   console.log(`Path: ${alarm.path}`);
    *   console.log(`Time: ${alarm.timestamp}`);
    * });
-   * 
+   *
    * // Example response:
    * // {
    * //   "connected": true,
@@ -655,29 +728,29 @@ export class SignalKClient extends EventEmitter {
       connected: this.connected,
       count: this.activeAlarms.size,
       alarms: Array.from(this.activeAlarms.values()),
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
   }
 
   /**
    * Discovers and returns all available SignalK data paths on the server
-   * 
+   *
    * Path discovery:
    * - Primary: Uses HTTP REST API to get complete path list from server
    * - Fallback: Uses WebSocket-discovered paths if HTTP fails
    * - Filters out metadata fields ($schema, meta, timestamp)
    * - Returns sorted alphabetical list of available data paths
-   * 
+   *
    * @returns Promise<AvailablePathsResponse> with array of available paths
-   * 
+   *
    * @example
    * const pathsResponse = await client.listAvailablePaths();
    * console.log(`${pathsResponse.count} paths available`);
-   * 
+   *
    * pathsResponse.paths.forEach(path => {
    *   console.log(`Available: ${path}`);
    * });
-   * 
+   *
    * // Example response:
    * // {
    * //   "connected": true,
@@ -695,18 +768,18 @@ export class SignalKClient extends EventEmitter {
    */
   async listAvailablePaths(): Promise<AvailablePathsResponse> {
     const paths = new Set<string>();
-    
+
     try {
       // Use helper method to build REST API URL
       const apiUrl = this.buildRestApiUrl('self');
-      
+
       const response = await fetch(apiUrl);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      
+
       const data = await response.json();
-      
+
       // Recursively extract all paths from the data
       const extractPaths = (obj: any, prefix = '') => {
         for (const [key, value] of Object.entries(obj)) {
@@ -714,69 +787,72 @@ export class SignalKClient extends EventEmitter {
           if (key.startsWith('$') || key === 'meta' || key === 'timestamp') {
             continue;
           }
-          
+
           const currentPath = prefix ? `${prefix}.${key}` : key;
-          
+
           // If this object has a 'value' property, it's a data point
           if (value && typeof value === 'object' && 'value' in value) {
             paths.add(currentPath);
           }
           // If it's an object without 'value', recurse deeper
-          else if (value && typeof value === 'object' && !Array.isArray(value)) {
+          else if (
+            value &&
+            typeof value === 'object' &&
+            !Array.isArray(value)
+          ) {
             extractPaths(value, currentPath);
           }
         }
       };
-      
+
       extractPaths(data);
-      
+
       return {
         connected: this.connected,
         count: paths.size,
         paths: Array.from(paths).sort(),
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
-      
     } catch (error: any) {
       console.error('Failed to fetch paths via HTTP:', error.message);
-      
+
       // Fallback to WebSocket-discovered paths
       return {
         connected: this.connected,
         count: this.availablePaths.size,
         paths: Array.from(this.availablePaths).sort(),
         timestamp: new Date().toISOString(),
-        error: `HTTP fetch failed: ${error.message}, using WebSocket-discovered paths`
+        error: `HTTP fetch failed: ${error.message}, using WebSocket-discovered paths`,
       };
     }
   }
 
   /**
    * Gets the latest value for a specific SignalK data path
-   * 
+   *
    * Value retrieval:
    * - Primary: Uses HTTP REST API for real-time data from server
    * - Fallback: Uses WebSocket-cached value if HTTP fails
    * - Returns complete value object with metadata
    * - Supports any valid SignalK path
-   * 
+   *
    * @param path - SignalK data path in dot notation (e.g., 'navigation.position')
    * @returns Promise<PathValueResponse> with latest value and metadata
-   * 
+   *
    * @example
    * // Get current position
    * const position = await client.getPathValue('navigation.position');
    * console.log('Latitude:', position.data.value.latitude);
    * console.log('Longitude:', position.data.value.longitude);
-   * 
+   *
    * // Get wind speed
    * const windSpeed = await client.getPathValue('environment.wind.speedApparent');
    * console.log('Wind speed:', windSpeed.data.value, 'm/s');
-   * 
+   *
    * // Get engine temperature
    * const engineTemp = await client.getPathValue('propulsion.main.temperature');
    * console.log('Engine temp:', engineTemp.data.value, 'K');
-   * 
+   *
    * // Example response:
    * // {
    * //   "connected": true,
@@ -799,50 +875,49 @@ export class SignalKClient extends EventEmitter {
     try {
       // Use helper method to build REST API URL for the specific path
       const apiUrl = this.buildRestApiUrl('self', path);
-      
+
       const response = await fetch(apiUrl);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      
+
       const data = await response.json();
-      
+
       return {
         connected: this.connected,
         path,
         data: data,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
-      
     } catch (error: any) {
       console.error(`Failed to fetch path ${path} via HTTP:`, error.message);
-      
+
       // Fallback to WebSocket-cached value
       const fullPath = `${this.context}.${path}`;
       const cachedData = this.latestValues.get(fullPath);
-      
+
       return {
         connected: this.connected,
         path,
         data: cachedData || null,
         timestamp: new Date().toISOString(),
-        error: `HTTP fetch failed: ${error.message}, using cached value`
+        error: `HTTP fetch failed: ${error.message}, using cached value`,
       };
     }
   }
 
   /**
    * Returns comprehensive connection status and client configuration information
-   * 
+   *
    * Status information:
    * - WebSocket connection state
    * - Server URLs (WebSocket and HTTP)
    * - Configuration details (hostname, port, TLS)
    * - Data cache statistics (paths, AIS targets, alarms)
    * - Vessel context being monitored
-   * 
+   *
    * @returns ConnectionStatus object with detailed connection information
-   * 
+   *
    * @example
    * const status = client.getConnectionStatus();
    * console.log('Connected:', status.connected);
@@ -851,7 +926,7 @@ export class SignalKClient extends EventEmitter {
    * console.log('Paths discovered:', status.pathCount);
    * console.log('AIS targets:', status.aisTargetCount);
    * console.log('Active alarms:', status.activeAlarmCount);
-   * 
+   *
    * // Example response:
    * // {
    * //   "connected": true,
@@ -881,24 +956,24 @@ export class SignalKClient extends EventEmitter {
       pathCount: this.availablePaths.size,
       aisTargetCount: this.aisTargets.size,
       activeAlarmCount: this.activeAlarms.size,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
   }
 
   /**
    * Cleanly disconnects from the SignalK server and cleans up resources
-   * 
+   *
    * Disconnect process:
    * - Closes WebSocket connection
    * - Sets connected flag to false
    * - Preserves cached data for potential reconnection
    * - Emits 'disconnected' event
-   * 
+   *
    * @example
    * // Disconnect when done
    * client.disconnect();
    * console.log('Disconnected from SignalK server');
-   * 
+   *
    * // Listen for disconnect events
    * client.on('disconnected', () => {
    *   console.log('SignalK connection closed');

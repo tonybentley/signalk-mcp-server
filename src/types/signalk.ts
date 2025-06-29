@@ -1,6 +1,6 @@
 /**
  * SignalK Protocol Types
- * 
+ *
  * Types and interfaces related to the SignalK marine data protocol
  */
 
