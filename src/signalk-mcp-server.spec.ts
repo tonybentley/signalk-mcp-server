@@ -16,6 +16,22 @@ import {
   beforeEach,
   afterEach,
 } from '@jest/globals';
+// Mock import.meta.url for Jest
+jest.mock('url', () => ({
+  fileURLToPath: jest.fn(() => '/mocked/path/src/signalk-mcp-server.ts'),
+}));
+
+// Mock path module  
+jest.mock('path', () => ({
+  dirname: jest.fn((p: string) => p.replace(/\/[^/]+$/, '')),
+  join: jest.fn((...args: string[]) => args.join('/')),
+}));
+
+// Mock fs/promises
+jest.mock('fs/promises', () => ({
+  readFile: jest.fn(() => Promise.resolve(JSON.stringify({ test: 'data' }))),
+}));
+
 import { SignalKMCPServer } from './signalk-mcp-server';
 import { SignalKClient } from './signalk-client';
 import type { SignalKMCPServerOptions } from './signalk-mcp-server';
@@ -26,7 +42,6 @@ jest.mock('./signalk-client', () => ({
     on: jest.fn(),
     connect: jest.fn().mockImplementation(() => Promise.resolve()), // Returns Promise<void>
     getVesselState: jest.fn(),
-    getVesselStateWithIdentity: jest.fn(),
     getAISTargets: jest.fn(),
     getActiveAlarms: jest.fn(),
     listAvailablePaths: jest.fn(),
@@ -87,7 +102,6 @@ describe('SignalKMCPServer', () => {
       on: jest.fn(),
       connect: jest.fn().mockImplementation(() => Promise.resolve()),
       getVesselState: jest.fn(),
-      getVesselStateWithIdentity: jest.fn(),
       getAISTargets: jest.fn(),
       getActiveAlarms: jest.fn(),
       listAvailablePaths: jest.fn(),
@@ -257,6 +271,14 @@ describe('SignalKMCPServer', () => {
         'get_connection_status',
         'get_initial_context',
       ]);
+      
+      // Verify get_ais_targets has pagination parameters
+      const aisTargetsTool = result.tools.find((tool: any) => tool.name === 'get_ais_targets');
+      expect(aisTargetsTool.inputSchema.properties).toHaveProperty('page');
+      expect(aisTargetsTool.inputSchema.properties).toHaveProperty('pageSize');
+      expect(aisTargetsTool.inputSchema.properties.page.type).toBe('number');
+      expect(aisTargetsTool.inputSchema.properties.pageSize.type).toBe('number');
+      expect(aisTargetsTool.inputSchema.properties.pageSize.maximum).toBe(50);
     });
   });
 
@@ -276,7 +298,7 @@ describe('SignalKMCPServer', () => {
         data: { position: 'test' },
         timestamp: '2025-06-21T10:00:00.000Z',
       };
-      mockSignalKClient.getVesselStateWithIdentity.mockResolvedValue(mockData);
+      mockSignalKClient.getVesselState.mockResolvedValue(mockData);
 
       const request = {
         params: { name: 'get_vessel_state', arguments: {} },
@@ -284,7 +306,7 @@ describe('SignalKMCPServer', () => {
 
       const result = await callToolHandler(request);
 
-      expect(mockSignalKClient.getVesselStateWithIdentity).toHaveBeenCalled();
+      expect(mockSignalKClient.getVesselState).toHaveBeenCalled();
       expect(result.content[0].type).toBe('text');
       expect(JSON.parse(result.content[0].text)).toEqual(mockData);
     });
@@ -295,8 +317,16 @@ describe('SignalKMCPServer', () => {
         targets: [],
         count: 0,
         timestamp: '2025-06-21T10:00:00.000Z',
+        pagination: {
+          page: 1,
+          pageSize: 10,
+          totalCount: 0,
+          totalPages: 0,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
       };
-      mockSignalKClient.getAISTargets.mockReturnValue(mockData);
+      mockSignalKClient.getAISTargets.mockResolvedValue(mockData);
 
       const request = {
         params: { name: 'get_ais_targets', arguments: {} },
@@ -304,7 +334,36 @@ describe('SignalKMCPServer', () => {
 
       const result = await callToolHandler(request);
 
-      expect(mockSignalKClient.getAISTargets).toHaveBeenCalled();
+      expect(mockSignalKClient.getAISTargets).toHaveBeenCalledWith(undefined, undefined);
+      expect(JSON.parse(result.content[0].text)).toEqual(mockData);
+    });
+
+    test('should execute get_ais_targets tool with pagination', async () => {
+      const mockData = {
+        connected: true,
+        targets: [
+          { mmsi: '123456789', distanceMeters: 1000, lastUpdate: '2025-06-21T10:00:00.000Z' },
+        ],
+        count: 1,
+        timestamp: '2025-06-21T10:00:00.000Z',
+        pagination: {
+          page: 2,
+          pageSize: 5,
+          totalCount: 10,
+          totalPages: 2,
+          hasNextPage: false,
+          hasPreviousPage: true,
+        },
+      };
+      mockSignalKClient.getAISTargets.mockResolvedValue(mockData);
+
+      const request = {
+        params: { name: 'get_ais_targets', arguments: { page: 2, pageSize: 5 } },
+      };
+
+      const result = await callToolHandler(request);
+
+      expect(mockSignalKClient.getAISTargets).toHaveBeenCalledWith(2, 5);
       expect(JSON.parse(result.content[0].text)).toEqual(mockData);
     });
 
@@ -315,7 +374,7 @@ describe('SignalKMCPServer', () => {
         count: 0,
         timestamp: '2025-06-21T10:00:00.000Z',
       };
-      mockSignalKClient.getActiveAlarms.mockReturnValue(mockData);
+      mockSignalKClient.getActiveAlarms.mockResolvedValue(mockData);
 
       const request = {
         params: { name: 'get_active_alarms', arguments: {} },
@@ -423,7 +482,7 @@ describe('SignalKMCPServer', () => {
     });
 
     test('should handle tool execution errors', async () => {
-      mockSignalKClient.getVesselStateWithIdentity.mockImplementation(() => {
+      mockSignalKClient.getVesselState.mockImplementation(() => {
         throw new Error('Tool execution failed');
       });
 
@@ -451,7 +510,7 @@ describe('SignalKMCPServer', () => {
         data: {},
         timestamp: '2025-06-21T10:00:00.000Z',
       };
-      mockSignalKClient.getVesselStateWithIdentity.mockResolvedValue(mockData);
+      mockSignalKClient.getVesselState.mockResolvedValue(mockData);
 
       const result = await server.getVesselState();
 
@@ -466,7 +525,7 @@ describe('SignalKMCPServer', () => {
         count: 0,
         timestamp: '2025-06-21T10:00:00.000Z',
       };
-      mockSignalKClient.getAISTargets.mockReturnValue(mockData);
+      mockSignalKClient.getAISTargets.mockResolvedValue(mockData);
 
       const result = await server.getAISTargets();
 
@@ -481,7 +540,7 @@ describe('SignalKMCPServer', () => {
         count: 0,
         timestamp: '2025-06-21T10:00:00.000Z',
       };
-      mockSignalKClient.getActiveAlarms.mockReturnValue(mockData);
+      mockSignalKClient.getActiveAlarms.mockResolvedValue(mockData);
 
       const result = await server.getActiveAlarms();
 

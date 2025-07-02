@@ -71,7 +71,7 @@ SIGNALK_PORT=3000
 SIGNALK_TLS=false
 
 # Remote server with custom port
-SIGNALK_HOST=192.168.1.100
+SIGNALK_HOST=localhost
 SIGNALK_PORT=8080
 SIGNALK_TLS=false
 
@@ -82,14 +82,14 @@ SIGNALK_TLS=true
 
 ## MCP TOOLS IMPLEMENTED
 1. get_initial_context() -> **Start here!** Returns comprehensive SignalK documentation and context for AI agents
-2. get_vessel_state() -> Returns current position, heading, speed, wind data, and vessel identity (name, MMSI)
-3. get_ais_targets() -> Returns nearby vessels from AIS with position/course/speed
-4. get_active_alarms() -> Returns current system notifications and alerts
+2. get_vessel_state() -> Returns current position, heading, speed, wind data, and vessel identity (name, MMSI) - **Always fetches fresh data via HTTP**
+3. get_ais_targets() -> Returns nearby vessels from AIS with position/course/speed - **Always fetches fresh data via HTTP**
+4. get_active_alarms() -> Returns current system notifications and alerts - **Always fetches fresh data via HTTP**
 5. list_available_paths() -> Discovers what SignalK data paths are available
 6. get_path_value(path) -> Get latest value for any specific SignalK path
-7. get_connection_status() -> Returns WebSocket connection state and health
+7. get_connection_status() -> Returns HTTP connection state and configuration
 
-**Note**: All tools are implemented and available. The actual tool names in the MCP server match these descriptions exactly.
+**Note**: All tools now fetch fresh data via HTTP on each request, eliminating any risk of stale cached data. WebSocket functionality is preserved but disabled for future streaming support when MCP servers support real-time data streams.
 
 ## MCP RESOURCES AVAILABLE
 - signalk://signalk_overview -> SignalK overview and core concepts
@@ -112,7 +112,7 @@ SIGNALK_TLS=true
 
 ## MODULE STRUCTURE
 src/index.ts                 # Main entry point and MCP server setup
-src/signalk-client.ts        # WebSocket client with reconnection logic and vessel identity retrieval
+src/signalk-client.ts        # HTTP client for SignalK API access (WebSocket code preserved for future)
 src/signalk-mcp-server.ts    # MCP server implementation with tools and resources
 src/types/                   # TypeScript type definitions
   ├── index.ts
@@ -123,24 +123,26 @@ resources/                   # Static reference resources (JSON files)
 
 ## KEY DESIGN PRINCIPLES
 - Read-only operations for safety
-- Automatic reconnection on connection loss
-- Event-driven architecture for real-time data
+- HTTP-only mode for guaranteed fresh data on every request
+- No caching - eliminates stale data issues completely
 - Simple error handling and graceful degradation
 - Configurable via environment variables
 - Minimal dependencies for easy deployment
 - Focus on providing basic situational awareness to AI agents
 - Vessel identity retrieval from top-level SignalK properties (name, MMSI)
-- HTTP API fallback for robust data access
+- Direct HTTP API access for all data fetching
 - Node.js 18+ required for native fetch support
+- WebSocket code preserved but disabled for future streaming capabilities
 
 ## SUCCESS CRITERIA
-- AI agent can get current vessel position and heading
-- AI agent can see nearby AIS targets
-- AI agent can monitor system alarms
-- AI agent can subscribe to live sensor data streams
+- AI agent can get current vessel position and heading with fresh data
+- AI agent can see nearby AIS targets with up-to-date positions
+- AI agent can monitor system alarms with current states
+- AI agent can discover available data paths
 - AI agent can query latest value for any specific path
-- Connection remains stable with automatic recovery
+- HTTP connectivity verification on connection
 - Simple deployment and configuration
+- No stale data returned - all queries fetch fresh from SignalK server
 
 ## Development Commands
 

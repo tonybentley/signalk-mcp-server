@@ -8,10 +8,15 @@
 
 import { describe, test, expect, beforeAll, afterAll } from '@jest/globals';
 import { SignalKClient } from '../src/signalk-client.js';
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 
 // Load environment configuration
 dotenv.config();
+
+// Test utilities
+const testUtils = {
+  waitFor: (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+};
 
 describe('SignalK Client getActiveAlarms - Live Integration', () => {
   let client: SignalKClient;
@@ -63,7 +68,7 @@ describe('SignalK Client getActiveAlarms - Live Integration', () => {
     await testUtils.waitFor(ALARM_COLLECTION_TIMEOUT);
 
     // Get active alarms
-    const alarms = client.getActiveAlarms();
+    const alarms = await client.getActiveAlarms();
 
     // Validate basic response structure
     expect(alarms).toBeDefined();
@@ -90,9 +95,9 @@ describe('SignalK Client getActiveAlarms - Live Integration', () => {
 
     // Response should be fast (cached data)
     const startTime = Date.now();
-    client.getActiveAlarms();
+    await client.getActiveAlarms();
     const responseTime = Date.now() - startTime;
-    expect(responseTime).toBeLessThan(100);
+    expect(responseTime).toBeLessThan(5000); // Allow up to 5s for HTTP request
 
     // Should be JSON serializable
     expect(() => JSON.stringify(alarms)).not.toThrow();
@@ -106,7 +111,7 @@ describe('SignalK Client getActiveAlarms - Live Integration', () => {
     // Wait for alarm data accumulation
     await testUtils.waitFor(ALARM_COLLECTION_TIMEOUT);
 
-    const alarms = client.getActiveAlarms();
+    const alarms = await client.getActiveAlarms();
 
     expect(alarms).toBeDefined();
     expect(alarms.connected).toBe(true);
@@ -173,15 +178,15 @@ describe('SignalK Client getActiveAlarms - Live Integration', () => {
     await testUtils.waitFor(ALARM_COLLECTION_TIMEOUT);
 
     // Get initial alarm state
-    const alarms1 = client.getActiveAlarms();
+    const alarms1 = await client.getActiveAlarms();
 
     // Wait and get second snapshot
     await testUtils.waitFor(2000);
-    const alarms2 = client.getActiveAlarms();
+    const alarms2 = await client.getActiveAlarms();
 
     // Wait and get third snapshot
     await testUtils.waitFor(2000);
-    const alarms3 = client.getActiveAlarms();
+    const alarms3 = await client.getActiveAlarms();
 
     // All results should have consistent structure
     for (const result of [alarms1, alarms2, alarms3]) {
@@ -250,7 +255,7 @@ describe('SignalK Client getActiveAlarms - Live Integration', () => {
     // Wait for alarm data
     await testUtils.waitFor(ALARM_COLLECTION_TIMEOUT);
 
-    const alarms = client.getActiveAlarms();
+    const alarms = await client.getActiveAlarms();
 
     expect(alarms).toBeDefined();
     expect(alarms.connected).toBe(true);
@@ -341,10 +346,10 @@ describe('SignalK Client getActiveAlarms - Live Integration', () => {
 
     // Performance validation
     const startTime = Date.now();
-    const fastAlarms = client.getActiveAlarms();
+    const fastAlarms = await client.getActiveAlarms();
     const responseTime = Date.now() - startTime;
 
-    expect(responseTime).toBeLessThan(50); // Should be very fast (cached)
+    expect(responseTime).toBeLessThan(5000); // Allow up to 5s for HTTP request // Should be very fast (cached)
     expect(fastAlarms.count).toBe(alarms.count); // Should be consistent
 
     console.log(
@@ -354,14 +359,14 @@ describe('SignalK Client getActiveAlarms - Live Integration', () => {
 
   test('should demonstrate real-time alarm monitoring and delta processing', async () => {
     // Get initial alarm baseline
-    const initialAlarms = client.getActiveAlarms();
+    const initialAlarms = await client.getActiveAlarms();
 
     // Monitor alarm changes over extended period
     const alarmSnapshots = [initialAlarms];
 
     for (let i = 0; i < 3; i++) {
       await testUtils.waitFor(1500); // Wait 1.5 seconds between snapshots
-      alarmSnapshots.push(client.getActiveAlarms());
+      alarmSnapshots.push(await client.getActiveAlarms());
     }
 
     // All snapshots should have valid structure
@@ -440,11 +445,11 @@ describe('SignalK Client getActiveAlarms - Live Integration', () => {
     const startTime = Date.now();
 
     for (let i = 0; i < 10; i++) {
-      rapidCalls.push(client.getActiveAlarms());
+      rapidCalls.push(await client.getActiveAlarms());
     }
 
     const rapidTime = Date.now() - startTime;
-    expect(rapidTime).toBeLessThan(500); // Should handle 10 calls quickly
+    expect(rapidTime).toBeLessThan(50000); // Allow up to 50s for 10 HTTP requests
 
     // All rapid calls should return consistent data
     const firstCall = rapidCalls[0];
@@ -457,9 +462,9 @@ describe('SignalK Client getActiveAlarms - Live Integration', () => {
     // Test parallel calls
     const parallelStart = Date.now();
     const parallelCalls = await Promise.all([
-      Promise.resolve(client.getActiveAlarms()),
-      Promise.resolve(client.getActiveAlarms()),
-      Promise.resolve(client.getActiveAlarms()),
+      client.getActiveAlarms(),
+      client.getActiveAlarms(),
+      client.getActiveAlarms(),
     ]);
     const parallelTime = Date.now() - parallelStart;
 
@@ -473,10 +478,10 @@ describe('SignalK Client getActiveAlarms - Live Integration', () => {
 
     // Memory usage validation - large number of calls shouldn't accumulate
     for (let i = 0; i < 100; i++) {
-      client.getActiveAlarms();
+      await client.getActiveAlarms();
     }
 
-    const finalCall = client.getActiveAlarms();
+    const finalCall = await client.getActiveAlarms();
     expect(finalCall.connected).toBe(true);
 
     // Data integrity after many calls
@@ -494,12 +499,12 @@ describe('SignalK Client getActiveAlarms - Live Integration', () => {
 
   test('should validate alarm data freshness and real-time responsiveness', async () => {
     // Get baseline alarm state
-    const baseline = client.getActiveAlarms();
+    const baseline = await client.getActiveAlarms();
 
     // Wait for potential alarm updates
     await testUtils.waitFor(ALARM_COLLECTION_TIMEOUT);
 
-    const updated = client.getActiveAlarms();
+    const updated = await client.getActiveAlarms();
 
     // Both should be valid
     expect(baseline.connected).toBe(true);
@@ -571,9 +576,9 @@ describe('SignalK Client getActiveAlarms - Live Integration', () => {
 
     // Response time should be consistent
     const responseStart = Date.now();
-    client.getActiveAlarms();
+    await client.getActiveAlarms();
     const responseTime = Date.now() - responseStart;
-    expect(responseTime).toBeLessThan(50);
+    expect(responseTime).toBeLessThan(5000); // Allow up to 5s for HTTP request
 
     console.log(
       `Freshness validation completed, response time: ${responseTime}ms`,

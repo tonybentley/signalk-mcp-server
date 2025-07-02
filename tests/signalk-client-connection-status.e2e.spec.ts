@@ -8,10 +8,15 @@
 
 import { describe, test, expect, beforeAll, afterAll } from '@jest/globals';
 import { SignalKClient } from '../src/signalk-client.js';
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 
 // Load environment configuration
 dotenv.config();
+
+// Test utilities
+const testUtils = {
+  waitFor: (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+};
 
 describe('SignalK Client getConnectionStatus - Live Integration', () => {
   let client: SignalKClient;
@@ -173,9 +178,9 @@ describe('SignalK Client getConnectionStatus - Live Integration', () => {
     expect(() => JSON.stringify(status2)).not.toThrow();
 
     // Validate counts against actual data
-    const vesselState = client.getVesselState();
-    const aisTargets = client.getAISTargets();
-    const activeAlarms = client.getActiveAlarms();
+    const vesselState = await client.getVesselState();
+    const aisTargets = await client.getAISTargets();
+    const activeAlarms = await client.getActiveAlarms();
 
     // pathCount represents ALL discovered paths, not just vessel context paths
     expect(status2.pathCount).toBeGreaterThanOrEqual(

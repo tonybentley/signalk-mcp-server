@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 import { SignalKMCPServer } from './signalk-mcp-server.js';
 
 dotenv.config();

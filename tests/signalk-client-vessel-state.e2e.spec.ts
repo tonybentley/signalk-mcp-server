@@ -8,10 +8,15 @@
 
 import { describe, test, expect, beforeAll, afterAll } from '@jest/globals';
 import { SignalKClient } from '../src/signalk-client.js';
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 
 // Load environment configuration
 dotenv.config();
+
+// Test utilities
+const testUtils = {
+  waitFor: (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+};
 
 describe('SignalK Client getVesselState - Live Integration', () => {
   let client: SignalKClient;
@@ -60,7 +65,7 @@ describe('SignalK Client getVesselState - Live Integration', () => {
 
   test('should connect to live server and return valid vessel state structure', async () => {
     // Test basic connection and structure
-    const vesselState = client.getVesselState();
+    const vesselState = await client.getVesselState();
 
     // Validate basic response structure
     expect(vesselState).toBeDefined();
@@ -86,11 +91,11 @@ describe('SignalK Client getVesselState - Live Integration', () => {
     expect(vesselState.data).toBeDefined();
     expect(typeof vesselState.data).toBe('object');
 
-    // Response should be fast (cached data)
+    // Response should be reasonable (HTTP request)
     const startTime = Date.now();
-    client.getVesselState();
+    await client.getVesselState();
     const responseTime = Date.now() - startTime;
-    expect(responseTime).toBeLessThan(100);
+    expect(responseTime).toBeLessThan(5000); // Allow up to 5s for HTTP request
 
     // If data exists, validate SignalK structure
     if (Object.keys(vesselState.data).length > 0) {
@@ -128,11 +133,11 @@ describe('SignalK Client getVesselState - Live Integration', () => {
     await testUtils.waitFor(DATA_COLLECTION_TIMEOUT);
 
     // Get initial vessel state
-    const vesselState1 = client.getVesselState();
+    const vesselState1 = await client.getVesselState();
 
     // Wait a bit and get second snapshot
     await testUtils.waitFor(2000);
-    const vesselState2 = client.getVesselState();
+    const vesselState2 = await client.getVesselState();
 
     // Get available paths for comparison
     const availablePaths = await client.listAvailablePaths();

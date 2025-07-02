@@ -33,12 +33,16 @@ export class SignalKClient extends EventEmitter {
     // Set SignalK connection configuration directly from environment variables
     this.setSignalKConfig(options);
 
+    // WEBSOCKET CLIENT PRESERVED FOR FUTURE STREAMING SUPPORT
+    // When MCP servers support streaming, this WebSocket client will enable
+    // real-time data updates for live vessel tracking, sensor monitoring, etc.
+    // Currently operating in HTTP-only mode for guaranteed data freshness.
     this.client = new Client({
       hostname: this.hostname,
       port: this.port,
       useTLS: this.useTLS,
       reconnect: true,
-      autoConnect: false,
+      autoConnect: false,  // WebSocket connection disabled for HTTP-only mode
       notifications: true,
       token: options.token || process.env.SIGNALK_TOKEN,
       subscribe: 'all',
@@ -62,10 +66,13 @@ export class SignalKClient extends EventEmitter {
     this.context =
       options.context || process.env.SIGNALK_CONTEXT || 'vessels.self';
     this.connected = false;
-    this.latestValues = new Map();
-    this.availablePaths = new Set();
-    this.aisTargets = new Map();
-    this.activeAlarms = new Map();
+    
+    // DATA STRUCTURES PRESERVED FOR FUTURE STREAMING SUPPORT
+    // These Maps/Sets would be populated via WebSocket deltas when streaming is enabled
+    this.latestValues = new Map();    // Would cache real-time sensor values
+    this.availablePaths = new Set();  // Would track discovered paths from deltas
+    this.aisTargets = new Map();      // Would track real-time AIS vessel movements
+    this.activeAlarms = new Map();    // Would track alarm state changes in real-time
 
     this.setupEventHandlers();
   }
@@ -169,16 +176,18 @@ export class SignalKClient extends EventEmitter {
   }
 
   /**
-   * Establishes WebSocket connection to SignalK server with timeout handling
+   * Establishes connection to SignalK server (HTTP-only mode)
+   *
+   * This method now operates in HTTP-only mode for maximum data freshness.
+   * WebSocket functionality is preserved but disabled for future streaming capabilities
+   * when MCP servers support real-time data streams.
    *
    * Features:
-   * - Promise-based connection with 10-second timeout
-   * - Prevents duplicate connections if already connected
-   * - Automatic error handling and cleanup
-   * - Subscribes to all vessel data paths upon connection
-   * - Fetches initial complete vessel state via HTTP after connection
+   * - Tests HTTP connectivity to SignalK server
+   * - Sets connected status based on HTTP availability
+   * - WebSocket code preserved for future streaming implementation
    *
-   * @returns Promise that resolves when connected or rejects on error/timeout
+   * @returns Promise that resolves when HTTP connection is verified
    *
    * @example
    * const client = new SignalKClient({ hostname: 'localhost', port: 3000 });
@@ -189,38 +198,54 @@ export class SignalKClient extends EventEmitter {
    *   console.error('Connection failed:', error);
    * }
    */
-  connect(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (this.connected) {
-        resolve();
-        return;
+  async connect(): Promise<void> {
+    // Test HTTP connectivity
+    try {
+      const apiUrl = this.buildRestApiUrl('self');
+      const response = await fetch(apiUrl);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-
-      const timeout = setTimeout(() => {
-        reject(new Error('Connection timeout'));
-      }, 10000);
-
-      this.client.once('connect', async () => {
-        clearTimeout(timeout);
-
-        // Fetch initial vessel state to populate cache immediately
-        try {
-          await this.fetchInitialVesselState();
-        } catch (error) {
-          console.error('Failed to fetch initial vessel state:', error);
-          // Don't fail connection if HTTP fetch fails - WebSocket deltas will populate data
+      
+      this.connected = true;
+      console.error('SignalK HTTP connection verified');
+      this.emit('connected');
+      
+      // WEBSOCKET CONNECTION DISABLED FOR HTTP-ONLY MODE
+      // The WebSocket client code below is preserved for future use when
+      // MCP servers support streaming. This will enable real-time data
+      // updates for features like live AIS tracking, sensor monitoring, etc.
+      
+      /* PRESERVED FOR FUTURE STREAMING SUPPORT:
+      return new Promise((resolve, reject) => {
+        if (this.connected) {
+          resolve();
+          return;
         }
 
-        resolve();
-      });
+        const timeout = setTimeout(() => {
+          reject(new Error('Connection timeout'));
+        }, 10000);
 
-      this.client.once('error', (error: any) => {
-        clearTimeout(timeout);
-        reject(error);
-      });
+        this.client.once('connect', async () => {
+          clearTimeout(timeout);
+          resolve();
+        });
 
-      this.client.connect();
-    });
+        this.client.once('error', (error: any) => {
+          clearTimeout(timeout);
+          reject(error);
+        });
+
+        this.client.connect();
+      });
+      */
+    } catch (error: any) {
+      this.connected = false;
+      console.error('SignalK HTTP connection failed:', error.message);
+      throw new Error(`Failed to connect to SignalK server: ${error.message}`);
+    }
   }
 
   /**
@@ -502,23 +527,26 @@ export class SignalKClient extends EventEmitter {
     // Keep alarms in normal state - do not delete them
   }
 
+
   /**
-   * Returns current vessel state with all available sensor data and navigation information
+   * Returns current vessel state with all available sensor data, navigation information, and vessel identity
    *
-   * Vessel state includes:
+   * This method fetches fresh data directly from the SignalK HTTP API on each request,
+   * ensuring that stale cached data is never returned. The response includes:
    * - All SignalK paths for the current vessel context (vessels.self by default)
+   * - Vessel identity information (name, MMSI, call sign)
    * - Position, heading, speed, wind, engine data, etc.
    * - Latest values with timestamps and source information
    * - Connection status and context information
    *
-   * @returns VesselState object with dynamic data structure based on available sensors
+   * @returns Promise<VesselState> object with fresh data from SignalK server
    *
    * @example
-   * const state = client.getVesselState();
-   * console.log('Position:', state.data['navigation.position']);
-   * console.log('Speed:', state.data['navigation.speedOverGround']);
-   * console.log('Wind:', state.data['environment.wind']);
-   * console.log('Connected:', state.connected);
+   * const state = await client.getVesselState();
+   * console.log('Vessel name:', state.data['name']?.value);
+   * console.log('Position:', state.data['navigation.position']?.value);
+   * console.log('Speed:', state.data['navigation.speedOverGround']?.value);
+   * console.log('Wind:', state.data['environment.wind']?.value);
    *
    * // Example response:
    * // {
@@ -526,6 +554,11 @@ export class SignalKClient extends EventEmitter {
    * //   "context": "vessels.self",
    * //   "timestamp": "2023-06-22T10:30:15.123Z",
    * //   "data": {
+   * //     "name": {
+   * //       "value": "My Vessel",
+   * //       "timestamp": "2023-06-22T10:30:15.000Z",
+   * //       "source": "vessel-identity"
+   * //     },
    * //     "navigation.position": {
    * //       "value": {"latitude": 37.8199, "longitude": -122.4783},
    * //       "timestamp": "2023-06-22T10:30:15.000Z",
@@ -538,104 +571,139 @@ export class SignalKClient extends EventEmitter {
    * //   }
    * // }
    */
-  getVesselState(): VesselState {
-    const state: any = {};
-
-    // Dynamically get all available paths for this vessel context
-    Array.from(this.latestValues.entries()).forEach(
-      ([fullPath, signalKValue]) => {
-        // Only include paths for the current vessel context
-        if (fullPath.startsWith(this.context + '.')) {
-          // Extract the path without the context prefix
-          const path = fullPath.substring(this.context.length + 1);
-
-          // Safety check: ensure path is valid
-          if (path && path !== 'undefined' && typeof path === 'string') {
-            state[path] = signalKValue;
-          }
-        }
-      },
-    );
-
-    return {
-      connected: this.connected,
-      context: this.context,
-      data: state,
-      timestamp: new Date().toISOString(),
-    };
-  }
-
-  /**
-   * Returns vessel state enriched with identity information from the vessel object
-   */
-  async getVesselStateWithIdentity(): Promise<VesselState> {
-    const baseState = this.getVesselState();
-    const state = { ...baseState.data };
-
-    // Add top-level vessel identity data that doesn't come through delta messages
+  async getVesselState(): Promise<VesselState> {
     try {
       const apiUrl = this.buildRestApiUrl('self');
       const response = await fetch(apiUrl);
-      if (response.ok) {
-        const vesselData = await response.json();
-
-        // Add top-level vessel properties as synthetic paths
-        if (vesselData.name) {
-          state['name'] = {
-            value: vesselData.name,
-            timestamp: new Date().toISOString(),
-            source: 'vessel-identity',
-          };
-        }
-        if (vesselData.mmsi) {
-          state['mmsi'] = {
-            value: vesselData.mmsi,
-            timestamp: new Date().toISOString(),
-            source: 'vessel-identity',
-          };
-        }
-        if (vesselData.communication?.callsignVhf) {
-          state['communication.callsignVhf'] = {
-            value: vesselData.communication.callsignVhf,
-            timestamp: new Date().toISOString(),
-            source: 'vessel-identity',
-          };
-        }
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-    } catch (error) {
-      // Silently fail - vessel identity is nice to have but not critical
+      
+      const vesselData = await response.json();
+      const state: any = {};
+      
+      // Format the vessel data into the expected structure
+      const formatData = (obj: any, prefix = '') => {
+        for (const [key, value] of Object.entries(obj)) {
+          // Skip metadata fields
+          if (key.startsWith('$') || key === 'meta' || key === 'timestamp') {
+            continue;
+          }
+          
+          const currentPath = prefix ? `${prefix}.${key}` : key;
+          
+          // If this object has a 'value' property, it's a SignalK data point
+          if (value && typeof value === 'object' && 'value' in value) {
+            state[currentPath] = {
+              value: (value as any).value,
+              timestamp: (value as any).timestamp || new Date().toISOString(),
+              source: (value as any).source,
+            };
+          }
+          // If it's an object without 'value', recurse deeper
+          else if (value && typeof value === 'object' && !Array.isArray(value)) {
+            formatData(value, currentPath);
+          }
+        }
+      };
+      
+      // Process the nested vessel data
+      formatData(vesselData);
+      
+      // Add top-level vessel properties as synthetic paths
+      if (vesselData.name) {
+        state['name'] = {
+          value: vesselData.name,
+          timestamp: new Date().toISOString(),
+          source: 'vessel-identity',
+        };
+      }
+      if (vesselData.mmsi) {
+        state['mmsi'] = {
+          value: vesselData.mmsi,
+          timestamp: new Date().toISOString(),
+          source: 'vessel-identity',
+        };
+      }
+      if (vesselData.communication?.callsignVhf) {
+        state['communication.callsignVhf'] = {
+          value: vesselData.communication.callsignVhf,
+          timestamp: new Date().toISOString(),
+          source: 'vessel-identity',
+        };
+      }
+      
+      return {
+        connected: this.connected,
+        context: this.context,
+        data: state,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error: any) {
+      // Return empty state with error indication
+      return {
+        connected: false,
+        context: this.context,
+        data: {},
+        timestamp: new Date().toISOString(),
+        error: `Failed to fetch vessel state: ${error.message}`,
+      };
     }
+  }
 
-    return {
-      connected: this.connected,
-      context: this.context,
-      data: state,
-      timestamp: new Date().toISOString(),
-    };
+  /**
+   * Calculates the distance between two geographic coordinates using the Haversine formula
+   * 
+   * @param lat1 - Latitude of first point
+   * @param lon1 - Longitude of first point
+   * @param lat2 - Latitude of second point
+   * @param lon2 - Longitude of second point
+   * @returns Distance in meters
+   */
+  private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371000; // Earth's radius in meters
+    const phi1 = lat1 * Math.PI / 180;
+    const phi2 = lat2 * Math.PI / 180;
+    const deltaPhi = (lat2 - lat1) * Math.PI / 180;
+    const deltaLambda = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+              Math.cos(phi1) * Math.cos(phi2) *
+              Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
   }
 
   /**
    * Returns nearby AIS targets (other vessels) with their position and navigation data
    *
-   * AIS target filtering:
+   * This method fetches fresh AIS data directly from the SignalK HTTP API on each request,
+   * ensuring that stale cached data is never returned. The response includes:
+   * - Only vessels with proper MMSI identifiers (true AIS targets)
+   * - Position, course, speed, and vessel identification
+   * - Distance in meters from self vessel (when positions available)
+   * - Sorted by proximity (closest vessels first)
+   * - Supports pagination with configurable page size
    * - Only includes targets updated within last 5 minutes
-   * - Limits results to 50 targets to prevent overwhelming responses
-   * - Includes MMSI, position, course, speed, vessel name if available
-   * - Automatically removes stale targets
    *
-   * @returns AISTargetsResponse with array of nearby vessels
+   * @param page - Page number (1-based, default: 1)
+   * @param pageSize - Number of targets per page (default: 10, max: 50)
+   * @returns Promise<AISTargetsResponse> with array of nearby vessels
    *
    * @example
-   * const targets = client.getAISTargets();
+   * const targets = await client.getAISTargets(1, 10);
    * console.log(`Found ${targets.count} nearby vessels`);
+   * console.log(`Page ${targets.pagination.page} of ${targets.pagination.totalPages}`);
    *
    * targets.targets.forEach(target => {
    *   console.log(`MMSI: ${target.mmsi}`);
-   *   if (target['navigation.position']) {
-   *     console.log(`Position: ${target['navigation.position'].latitude}, ${target['navigation.position'].longitude}`);
+   *   if (target.distanceMeters) {
+   *     console.log(`Distance: ${target.distanceMeters}m`);
    *   }
-   *   if (target['navigation.courseOverGround']) {
-   *     console.log(`Course: ${target['navigation.courseOverGround']}°`);
+   *   if (target['navigation.position']) {
+   *     console.log(`Position: ${target['navigation.position'].value.latitude}, ${target['navigation.position'].value.longitude}`);
    *   }
    * });
    *
@@ -647,47 +715,191 @@ export class SignalKClient extends EventEmitter {
    * //   "targets": [
    * //     {
    * //       "mmsi": "123456789",
-   * //       "navigation.position": {"latitude": 37.8200, "longitude": -122.4800},
-   * //       "navigation.courseOverGround": 45.0,
-   * //       "navigation.speedOverGround": 8.5,
+   * //       "distanceMeters": 1852.5,
+   * //       "navigation.position": {
+   * //         "value": {"latitude": 37.8200, "longitude": -122.4800},
+   * //         "timestamp": "2023-06-22T10:29:45.000Z"
+   * //       },
    * //       "lastUpdate": "2023-06-22T10:29:45.000Z"
    * //     }
-   * //   ]
+   * //   ],
+   * //   "pagination": {
+   * //     "page": 1,
+   * //     "pageSize": 10,
+   * //     "totalCount": 15,
+   * //     "totalPages": 2,
+   * //     "hasNextPage": true,
+   * //     "hasPreviousPage": false
+   * //   }
    * // }
    */
-  getAISTargets(): AISTargetsResponse {
-    const targets = Array.from(this.aisTargets.values())
-      .filter((target) => {
-        const age = Date.now() - new Date(target.lastUpdate).getTime();
-        return age < 300000; // 5 minutes
-      })
-      .slice(0, 50); // Limit to 50 targets
+  async getAISTargets(page: number = 1, pageSize: number = 10): Promise<AISTargetsResponse> {
+    try {
+      // Validate pagination parameters
+      pageSize = Math.min(Math.max(1, pageSize), 50); // Clamp between 1 and 50
+      page = Math.max(1, page);
 
-    return {
-      connected: this.connected,
-      count: targets.length,
-      targets,
-      timestamp: new Date().toISOString(),
-    };
+      // First, get self vessel position for distance calculation
+      let selfPosition: { latitude: number; longitude: number } | undefined = undefined;
+      try {
+        const selfData = await this.getVesselState();
+        const positionData = selfData.data['navigation.position'];
+        if (positionData && positionData.value && 
+            typeof positionData.value === 'object' &&
+            'latitude' in positionData.value && 
+            'longitude' in positionData.value) {
+          selfPosition = positionData.value as { latitude: number; longitude: number };
+        }
+      } catch (error: any) {
+        // Failed to get self vessel position - continue without distance calculation
+      }
+
+      // Fetch all vessels from the API
+      const apiUrl = `${this.buildHttpUrl()}/signalk/v1/api/vessels`;
+      const response = await fetch(apiUrl);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const vesselsData = await response.json();
+      const targets: AISTarget[] = [];
+      const now = Date.now();
+      
+      // Process each vessel
+      for (const [vesselId, vesselData] of Object.entries(vesselsData)) {
+        // Skip self and non-object entries
+        if (vesselId === 'self' || typeof vesselData !== 'object') {
+          continue;
+        }
+        
+        // Only process vessels with proper MMSI format (true AIS targets)
+        const mmsiMatch = vesselId.match(/urn:mrn:imo:mmsi:(\d+)/);
+        if (!mmsiMatch) {
+          continue;
+        }
+        
+        const mmsi = mmsiMatch[1];
+        const target: AISTarget = {
+          mmsi: mmsi,
+          lastUpdate: new Date().toISOString(),
+        };
+        
+        // Extract vessel data and check freshness
+        let mostRecentTimestamp = 0;
+        let targetLatitude: number | undefined = undefined;
+        let targetLongitude: number | undefined = undefined;
+        
+        const extractData = (obj: any, prefix = '') => {
+          for (const [key, value] of Object.entries(obj)) {
+            if (key.startsWith('$') || key === 'meta') {
+              continue;
+            }
+            
+            const path = prefix ? `${prefix}.${key}` : key;
+            
+            if (value && typeof value === 'object' && 'value' in value) {
+              target[path] = value;
+              
+              // Capture position for distance calculation
+              if (path === 'navigation.position' && value.value && 
+                  typeof value.value === 'object' && 
+                  'latitude' in value.value && 
+                  'longitude' in value.value) {
+                targetLatitude = Number(value.value.latitude);
+                targetLongitude = Number(value.value.longitude);
+              }
+              
+              // Track most recent update
+              if ((value as any).timestamp) {
+                const timestamp = new Date((value as any).timestamp).getTime();
+                if (timestamp > mostRecentTimestamp) {
+                  mostRecentTimestamp = timestamp;
+                  target.lastUpdate = (value as any).timestamp;
+                }
+              }
+            } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+              extractData(value, path);
+            }
+          }
+        };
+        
+        extractData(vesselData);
+        
+        // Only include if data is less than 5 minutes old
+        if (mostRecentTimestamp > 0 && (now - mostRecentTimestamp) < 300000) {
+          // Calculate distance if both positions are available
+          if (selfPosition && targetLatitude !== undefined && targetLongitude !== undefined) {
+            target.distanceMeters = this.calculateDistance(
+              selfPosition.latitude,
+              selfPosition.longitude,
+              targetLatitude,
+              targetLongitude
+            );
+          }
+          targets.push(target);
+        }
+      }
+      
+      // Sort by distance (closest first)
+      targets.sort((a, b) => {
+        // Targets with distance come first
+        if (a.distanceMeters !== undefined && b.distanceMeters !== undefined) {
+          return a.distanceMeters - b.distanceMeters;
+        }
+        if (a.distanceMeters !== undefined) return -1;
+        if (b.distanceMeters !== undefined) return 1;
+        // For targets without distance, sort by last update
+        return new Date(b.lastUpdate).getTime() - new Date(a.lastUpdate).getTime();
+      });
+      
+      // Calculate pagination
+      const totalCount = targets.length;
+      const totalPages = Math.ceil(totalCount / pageSize);
+      const startIndex = (page - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      const paginatedTargets = targets.slice(startIndex, endIndex);
+      
+      return {
+        connected: this.connected,
+        count: paginatedTargets.length,
+        targets: paginatedTargets,
+        timestamp: new Date().toISOString(),
+        pagination: {
+          page,
+          pageSize,
+          totalCount,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPreviousPage: page > 1,
+        },
+      };
+    } catch (error: any) {
+      // Return empty targets list with error indication
+      return {
+        connected: false,
+        count: 0,
+        targets: [],
+        timestamp: new Date().toISOString(),
+        error: `Failed to fetch AIS targets: ${error.message}`,
+      };
+    }
   }
 
   /**
    * Returns all alarms and system notifications including resolved (normal state) alarms
    *
-   * Alarm states:
-   * - 'alert': General warning condition
-   * - 'warn': Warning that requires attention
-   * - 'alarm': Alarm condition requiring immediate attention
-   * - 'emergency': Emergency condition requiring immediate action
-   * - 'normal': Previously active alarm now resolved (provides audit trail)
+   * This method fetches fresh alarm data directly from the SignalK HTTP API on each request,
+   * ensuring that stale cached data is never returned. The response includes:
+   * - All notification paths from the current vessel
+   * - Alarm states: alert, warn, alarm, emergency, and normal (resolved)
+   * - Notification messages and metadata
+   * - Fresh timestamps for each notification
    *
-   * Note: This method now includes alarms in 'normal' state to provide complete
-   * alarm history and audit trail. Use filtering if you need only critical alarms.
-   *
-   * @returns ActiveAlarmsResponse with array of all notifications (including normal)
+   * @returns Promise<ActiveAlarmsResponse> with array of all notifications
    *
    * @example
-   * const alarms = client.getActiveAlarms();
+   * const alarms = await client.getActiveAlarms();
    * console.log(`${alarms.count} total alarms (including resolved)`);
    *
    * // Filter for only critical alarms
@@ -723,13 +935,65 @@ export class SignalKClient extends EventEmitter {
    * //   ]
    * // }
    */
-  getActiveAlarms(): ActiveAlarmsResponse {
-    return {
-      connected: this.connected,
-      count: this.activeAlarms.size,
-      alarms: Array.from(this.activeAlarms.values()),
-      timestamp: new Date().toISOString(),
-    };
+  async getActiveAlarms(): Promise<ActiveAlarmsResponse> {
+    try {
+      const apiUrl = this.buildRestApiUrl('self');
+      const response = await fetch(apiUrl);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const vesselData = await response.json();
+      const alarms: any[] = [];
+      
+      // Extract notifications from vessel data
+      const extractNotifications = (obj: any, pathPrefix = '') => {
+        for (const [key, value] of Object.entries(obj)) {
+          if (key.startsWith('$') || key === 'meta') {
+            continue;
+          }
+          
+          const currentPath = pathPrefix ? `${pathPrefix}.${key}` : key;
+          
+          // Check if this is a notification path
+          if (currentPath.startsWith('notifications.') && value && typeof value === 'object' && 'value' in value) {
+            const notifValue = (value as any).value;
+            if (notifValue && notifValue.state) {
+              alarms.push({
+                path: currentPath,
+                state: notifValue.state,
+                message: notifValue.message || '',
+                timestamp: (value as any).timestamp || new Date().toISOString(),
+              });
+            }
+          } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+            extractNotifications(value, currentPath);
+          }
+        }
+      };
+      
+      // Extract all notifications
+      if (vesselData.notifications) {
+        extractNotifications({ notifications: vesselData.notifications });
+      }
+      
+      return {
+        connected: this.connected,
+        count: alarms.length,
+        alarms: alarms,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error: any) {
+      // Return empty alarms list with error indication
+      return {
+        connected: false,
+        count: 0,
+        alarms: [],
+        timestamp: new Date().toISOString(),
+        error: `Failed to fetch alarms: ${error.message}`,
+      };
+    }
   }
 
   /**
@@ -909,12 +1173,17 @@ export class SignalKClient extends EventEmitter {
   /**
    * Returns comprehensive connection status and client configuration information
    *
+   * This method now reflects HTTP-only mode status. WebSocket information is
+   * preserved for future streaming support but not actively used.
+   *
    * Status information:
-   * - WebSocket connection state
-   * - Server URLs (WebSocket and HTTP)
+   * - HTTP connection state (verified during connect())
+   * - Server URLs (both WebSocket and HTTP for reference)
    * - Configuration details (hostname, port, TLS)
-   * - Data cache statistics (paths, AIS targets, alarms)
    * - Vessel context being monitored
+   *
+   * Note: Cache statistics (pathCount, aisTargetCount, activeAlarmCount) will
+   * always be 0 in HTTP-only mode as data is fetched fresh on each request.
    *
    * @returns ConnectionStatus object with detailed connection information
    *
@@ -923,64 +1192,55 @@ export class SignalKClient extends EventEmitter {
    * console.log('Connected:', status.connected);
    * console.log('Server:', status.hostname + ':' + status.port);
    * console.log('TLS:', status.useTLS);
-   * console.log('Paths discovered:', status.pathCount);
-   * console.log('AIS targets:', status.aisTargetCount);
-   * console.log('Active alarms:', status.activeAlarmCount);
+   * console.log('HTTP URL:', status.httpUrl);
    *
    * // Example response:
    * // {
    * //   "connected": true,
-   * //   "url": "ws://localhost:3000",
-   * //   "wsUrl": "ws://localhost:3000",
+   * //   "url": "http://localhost:3000",
+   * //   "wsUrl": "ws://localhost:3000",  // Preserved for future use
    * //   "httpUrl": "http://localhost:3000",
    * //   "hostname": "localhost",
    * //   "port": 3000,
    * //   "useTLS": false,
    * //   "context": "vessels.self",
-   * //   "pathCount": 25,
-   * //   "aisTargetCount": 3,
-   * //   "activeAlarmCount": 1,
+   * //   "pathCount": 0,  // Always 0 in HTTP-only mode
+   * //   "aisTargetCount": 0,  // Always 0 in HTTP-only mode
+   * //   "activeAlarmCount": 0,  // Always 0 in HTTP-only mode
    * //   "timestamp": "2023-06-22T10:30:15.123Z"
    * // }
    */
   getConnectionStatus(): ConnectionStatus {
     return {
       connected: this.connected,
-      url: this.originalUrl,
-      wsUrl: this.buildWebSocketUrl(),
+      url: this.buildHttpUrl(),  // Changed to show HTTP URL as primary
+      wsUrl: this.buildWebSocketUrl(),  // Preserved for future streaming
       httpUrl: this.buildHttpUrl(),
       hostname: this.hostname,
       port: this.port,
       useTLS: this.useTLS,
       context: this.context,
-      pathCount: this.availablePaths.size,
-      aisTargetCount: this.aisTargets.size,
-      activeAlarmCount: this.activeAlarms.size,
+      pathCount: 0,  // Always 0 in HTTP-only mode (no cache)
+      aisTargetCount: 0,  // Always 0 in HTTP-only mode (no cache)
+      activeAlarmCount: 0,  // Always 0 in HTTP-only mode (no cache)
       timestamp: new Date().toISOString(),
     };
   }
 
   /**
-   * Cleanly disconnects from the SignalK server and cleans up resources
+   * Cleanly disconnects from the SignalK server
    *
-   * Disconnect process:
-   * - Closes WebSocket connection
-   * - Sets connected flag to false
-   * - Preserves cached data for potential reconnection
-   * - Emits 'disconnected' event
+   * In HTTP-only mode, this simply sets the connected flag to false.
+   * The WebSocket disconnect is preserved for future streaming support.
    *
    * @example
    * // Disconnect when done
    * client.disconnect();
    * console.log('Disconnected from SignalK server');
-   *
-   * // Listen for disconnect events
-   * client.on('disconnected', () => {
-   *   console.log('SignalK connection closed');
-   * });
    */
   disconnect(): void {
-    this.client.disconnect();
     this.connected = false;
+    // WebSocket disconnect preserved for future streaming support
+    // this.client.disconnect();
   }
 }

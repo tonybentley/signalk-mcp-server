@@ -13,6 +13,11 @@ import * as dotenv from 'dotenv';
 // Load environment configuration
 dotenv.config();
 
+// Test utilities
+const testUtils = {
+  waitFor: (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+};
+
 describe('SignalK Client listAvailablePaths - Live Integration', () => {
   let client: SignalKClient;
 

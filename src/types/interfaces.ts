@@ -7,6 +7,7 @@
 export interface AISTarget {
   mmsi: string;
   lastUpdate: string;
+  distanceMeters?: number; // Distance in meters from self vessel (optional)
   [key: string]: any;
 }
 
@@ -22,6 +23,7 @@ export interface VesselState {
   context: string;
   data: Record<string, any>;
   timestamp: string;
+  error?: string;
 }
 
 export interface AISTargetsResponse {
@@ -29,6 +31,15 @@ export interface AISTargetsResponse {
   count: number;
   targets: AISTarget[];
   timestamp: string;
+  error?: string;
+  pagination?: {
+    page: number;
+    pageSize: number;
+    totalCount: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
 }
 
 export interface ActiveAlarmsResponse {
@@ -36,6 +47,7 @@ export interface ActiveAlarmsResponse {
   count: number;
   alarms: ActiveAlarm[];
   timestamp: string;
+  error?: string;
 }
 
 export interface ConnectionStatus {

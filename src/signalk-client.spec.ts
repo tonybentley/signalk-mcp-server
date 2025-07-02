@@ -334,8 +334,24 @@ describe('SignalKClient', () => {
       });
     });
 
-    test('should return vessel state correctly', () => {
-      const state = client.getVesselState();
+    test('should return vessel state correctly', async () => {
+      // Mock HTTP response for vessel state
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          name: 'Test Vessel',
+          mmsi: '123456789',
+          navigation: {
+            position: {
+              value: { latitude: 37.8199, longitude: -122.4783 },
+              timestamp: '2025-06-21T10:00:00.000Z',
+              source: { label: 'GPS1', type: 'NMEA0183' },
+            },
+          },
+        }),
+      } as Response);
+
+      const state = await client.getVesselState();
 
       expect(state.connected).toBe(false);
       expect(state.context).toBe('vessels.self');
@@ -344,73 +360,266 @@ describe('SignalKClient', () => {
         latitude: 37.8199,
         longitude: -122.4783,
       });
+      expect(state.data['name']).toBeDefined();
+      expect(state.data['name'].value).toBe('Test Vessel');
     });
 
-    test('should return vessel state dynamically based on available paths', () => {
-      // Add additional paths to test dynamic behavior
-      client.latestValues.set('vessels.self.navigation.speedOverGround', {
-        value: 5.2,
-        timestamp: '2025-06-21T10:00:00.000Z',
-        source: { label: 'GPS1', type: 'NMEA0183' },
-      });
+    test('should return vessel state dynamically based on available paths', async () => {
+      // Mock HTTP response with multiple paths
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          navigation: {
+            position: {
+              value: { latitude: 37.8199, longitude: -122.4783 },
+              timestamp: '2025-06-21T10:00:00.000Z',
+              source: { label: 'GPS1', type: 'NMEA0183' },
+            },
+            speedOverGround: {
+              value: 5.2,
+              timestamp: '2025-06-21T10:00:00.000Z',
+              source: { label: 'GPS1', type: 'NMEA0183' },
+            },
+          },
+          environment: {
+            wind: {
+              speedApparent: {
+                value: 10.5,
+                timestamp: '2025-06-21T10:00:00.000Z',
+                source: { label: 'Wind1', type: 'NMEA0183' },
+              },
+            },
+          },
+        }),
+      } as Response);
 
-      client.latestValues.set('vessels.self.environment.wind.speedApparent', {
-        value: 10.5,
-        timestamp: '2025-06-21T10:00:00.000Z',
-        source: { label: 'Wind1', type: 'NMEA0183' },
-      });
-
-      const state = client.getVesselState();
+      const state = await client.getVesselState();
 
       // Should include all available paths for the vessel context
       expect(state.data['navigation.position']).toBeDefined();
       expect(state.data['navigation.speedOverGround']).toBeDefined();
       expect(state.data['environment.wind.speedApparent']).toBeDefined();
-
-      // Should not include paths from other vessel contexts
-      client.latestValues.set('vessels.other.navigation.position', {
-        value: { latitude: 1, longitude: 1 },
-        timestamp: '2025-06-21T10:00:00.000Z',
-      });
-
-      const stateAfter = client.getVesselState();
-      expect(
-        stateAfter.data['vessels.other.navigation.position'],
-      ).toBeUndefined();
     });
 
-    test('should return AIS targets correctly', () => {
-      const targets = client.getAISTargets();
+    test('should return AIS targets correctly', async () => {
+      const currentTimestamp = new Date().toISOString();
+      
+      // Mock self vessel position first
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          navigation: {
+            position: {
+              value: { latitude: 37.81, longitude: -122.47 },
+              timestamp: currentTimestamp,
+            },
+          },
+        }),
+      } as Response);
+      
+      // Mock HTTP response for vessels
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          self: {},
+          'urn:mrn:imo:mmsi:123456789': {
+            navigation: {
+              position: {
+                value: { latitude: 37.82, longitude: -122.48 },
+                timestamp: currentTimestamp,
+              },
+            },
+          },
+        }),
+      } as Response);
+
+      const targets = await client.getAISTargets();
 
       expect(targets.connected).toBe(false);
       expect(targets.count).toBe(1);
       expect(targets.targets).toHaveLength(1);
       expect(targets.targets[0].mmsi).toBe('123456789');
+      expect(targets.targets[0].distanceMeters).toBeDefined();
+      expect(targets.targets[0].distanceMeters).toBeGreaterThan(0);
+      expect(targets.pagination).toBeDefined();
+      expect(targets.pagination?.page).toBe(1);
+      expect(targets.pagination?.pageSize).toBe(10);
     });
 
-    test('should filter old AIS targets', () => {
-      // Add an old target (> 5 minutes old)
+    test('should filter old AIS targets', async () => {
       const oldTimestamp = new Date(Date.now() - 400000).toISOString(); // 6+ minutes ago
-      client.aisTargets.set('old-target', {
-        mmsi: 'old-target',
-        lastUpdate: oldTimestamp,
-      });
+      const recentTimestamp = new Date().toISOString();
 
-      // Add a recent target
-      client.aisTargets.set('123456789', {
-        mmsi: '123456789',
-        lastUpdate: new Date().toISOString(),
-      });
+      // Mock self vessel position first
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          navigation: {
+            position: {
+              value: { latitude: 37.81, longitude: -122.47 },
+              timestamp: recentTimestamp,
+            },
+          },
+        }),
+      } as Response);
 
-      const targets = client.getAISTargets();
+      // Mock HTTP response with old and recent targets
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          self: {},
+          'urn:mrn:imo:mmsi:987654321': {
+            navigation: {
+              position: {
+                value: { latitude: 37.82, longitude: -122.48 },
+                timestamp: oldTimestamp,
+              },
+            },
+          },
+          'urn:mrn:imo:mmsi:123456789': {
+            navigation: {
+              position: {
+                value: { latitude: 37.83, longitude: -122.49 },
+                timestamp: recentTimestamp,
+              },
+            },
+          },
+        }),
+      } as Response);
+
+      const targets = await client.getAISTargets();
 
       // Should only return the recent target
       expect(targets.count).toBe(1);
       expect(targets.targets[0].mmsi).toBe('123456789');
     });
 
-    test('should return active alarms correctly', () => {
-      const alarms = client.getActiveAlarms();
+    test('should handle AIS targets pagination', async () => {
+      const currentTimestamp = new Date().toISOString();
+      
+      // Mock self vessel position
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          navigation: {
+            position: {
+              value: { latitude: 37.81, longitude: -122.47 },
+              timestamp: currentTimestamp,
+            },
+          },
+        }),
+      } as Response);
+      
+      // Mock 15 AIS targets
+      const vesselsData: any = { self: {} };
+      for (let i = 1; i <= 15; i++) {
+        vesselsData[`urn:mrn:imo:mmsi:${i.toString().padStart(9, '0')}`] = {
+          navigation: {
+            position: {
+              value: { latitude: 37.81 + i * 0.001, longitude: -122.47 + i * 0.001 },
+              timestamp: currentTimestamp,
+            },
+          },
+        };
+      }
+      
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(vesselsData),
+      } as Response);
+
+      // Test page 1
+      const page1 = await client.getAISTargets(1, 10);
+      expect(page1.count).toBe(10);
+      expect(page1.pagination?.totalCount).toBe(15);
+      expect(page1.pagination?.totalPages).toBe(2);
+      expect(page1.pagination?.hasNextPage).toBe(true);
+      expect(page1.pagination?.hasPreviousPage).toBe(false);
+
+      // Reset mocks for page 2
+      mockFetch.mockClear();
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          navigation: {
+            position: {
+              value: { latitude: 37.81, longitude: -122.47 },
+              timestamp: currentTimestamp,
+            },
+          },
+        }),
+      } as Response);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(vesselsData),
+      } as Response);
+
+      // Test page 2
+      const page2 = await client.getAISTargets(2, 10);
+      expect(page2.count).toBe(5);
+      expect(page2.pagination?.hasNextPage).toBe(false);
+      expect(page2.pagination?.hasPreviousPage).toBe(true);
+    });
+
+    test('should calculate distance correctly', async () => {
+      const currentTimestamp = new Date().toISOString();
+      
+      // Mock self vessel position
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          navigation: {
+            position: {
+              value: { latitude: 37.81, longitude: -122.47 },
+              timestamp: currentTimestamp,
+            },
+          },
+        }),
+      } as Response);
+      
+      // Mock AIS target
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          self: {},
+          'urn:mrn:imo:mmsi:123456789': {
+            navigation: {
+              position: {
+                // Approximately 1.57km away
+                value: { latitude: 37.82, longitude: -122.48 },
+                timestamp: currentTimestamp,
+              },
+            },
+          },
+        }),
+      } as Response);
+
+      const targets = await client.getAISTargets();
+      
+      expect(targets.targets[0].distanceMeters).toBeDefined();
+      // Should be approximately 1417 meters (allow for calculation precision)
+      expect(targets.targets[0].distanceMeters).toBeGreaterThan(1400);
+      expect(targets.targets[0].distanceMeters).toBeLessThan(1450);
+    });
+
+    test('should return active alarms correctly', async () => {
+      // Mock HTTP response with notifications
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          notifications: {
+            test: {
+              value: {
+                state: 'alert',
+                message: 'Test alarm',
+              },
+              timestamp: '2025-06-21T10:00:00.000Z',
+            },
+          },
+        }),
+      } as Response);
+
+      const alarms = await client.getActiveAlarms();
 
       expect(alarms.connected).toBe(false);
       expect(alarms.count).toBe(1);
@@ -428,9 +637,9 @@ describe('SignalKClient', () => {
       expect(status.hostname).toBe('localhost');
       expect(status.port).toBe(3000);
       expect(status.useTLS).toBe(false);
-      expect(status.pathCount).toBe(2);
-      expect(status.aisTargetCount).toBe(1);
-      expect(status.activeAlarmCount).toBe(1);
+      expect(status.pathCount).toBe(0); // Always 0 in HTTP-only mode
+      expect(status.aisTargetCount).toBe(0); // Always 0 in HTTP-only mode
+      expect(status.activeAlarmCount).toBe(0); // Always 0 in HTTP-only mode
     });
   });
 
@@ -454,7 +663,7 @@ describe('SignalKClient', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => mockResponse,
+        json: () => Promise.resolve(mockResponse),
       } as Response);
 
       const result = await client.listAvailablePaths();
@@ -485,7 +694,7 @@ describe('SignalKClient', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => mockResponse,
+        json: () => Promise.resolve(mockResponse),
       } as Response);
 
       const result = await client.getPathValue(
@@ -531,46 +740,42 @@ describe('SignalKClient', () => {
       client = new SignalKClient();
     });
 
-    test('should resolve immediately if already connected', async () => {
-      client.connected = true;
+    test('should verify HTTP connectivity on connect', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ name: 'Test Vessel' }),
+      } as Response);
 
-      const result = await client.connect();
+      await client.connect();
 
-      expect(result).toBeUndefined();
-      expect(mockSignalKClient.connect).not.toHaveBeenCalled();
+      expect(client.connected).toBe(true);
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/signalk/v1/api/vessels/self'),
+      );
     });
 
-    test('should handle connection timeout', async () => {
-      jest.useFakeTimers();
+    test('should handle HTTP connection failure', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        statusText: 'Service Unavailable',
+      } as Response);
 
-      // Mock the connection to never resolve
-      mockSignalKClient.connect.mockImplementation(() => new Promise(() => {}));
+      await expect(client.connect()).rejects.toThrow(
+        'Failed to connect to SignalK server',
+      );
 
-      const connectPromise = client.connect();
-
-      // Fast-forward past timeout
-      jest.advanceTimersByTime(10000);
-
-      await expect(connectPromise).rejects.toThrow('Connection timeout');
-
-      jest.useRealTimers();
+      expect(client.connected).toBe(false);
     });
 
-    test('should handle connection errors', async () => {
-      const error = new Error('Connection failed');
+    test('should handle network errors on connect', async () => {
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
-      // Mock the connection to trigger error event
-      mockSignalKClient.connect.mockImplementation(() => {
-        // Simulate error event being triggered
-        const errorHandler = mockSignalKClient.once.mock.calls.find(
-          (call: any) => call[0] === 'error',
-        )?.[1];
-        if (errorHandler) {
-          setTimeout(() => errorHandler(error), 0);
-        }
-      });
+      await expect(client.connect()).rejects.toThrow(
+        'Failed to connect to SignalK server: Network error',
+      );
 
-      await expect(client.connect()).rejects.toThrow('Connection failed');
+      expect(client.connected).toBe(false);
     });
 
     test('should disconnect properly', () => {
@@ -578,7 +783,6 @@ describe('SignalKClient', () => {
 
       client.disconnect();
 
-      expect(mockSignalKClient.disconnect).toHaveBeenCalled();
       expect(client.connected).toBe(false);
     });
   });
@@ -755,26 +959,51 @@ describe('SignalKClient', () => {
       expect(clientWithInvalidPort.port).toBe(3000); // Should fallback to default
     });
 
-    test('should handle old AIS targets cleanup', () => {
+    test('should handle old AIS targets cleanup', async () => {
       const oldTimestamp = new Date(Date.now() - 25 * 60 * 1000).toISOString(); // 25 minutes ago
-
-      client.aisTargets.set('old.target', {
-        mmsi: 'old.target',
-        lastUpdate: oldTimestamp,
-        'navigation.position': { latitude: 1, longitude: 1 },
-      });
-
       const recentTimestamp = new Date().toISOString();
-      client.aisTargets.set('recent.target', {
-        mmsi: 'recent.target',
-        lastUpdate: recentTimestamp,
-        'navigation.position': { latitude: 2, longitude: 2 },
-      });
 
-      const result = client.getAISTargets();
+      // Mock self vessel position first
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          navigation: {
+            position: {
+              value: { latitude: 0, longitude: 0 },
+              timestamp: recentTimestamp,
+            },
+          },
+        }),
+      } as Response);
+
+      // Mock HTTP response with old and recent targets
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          self: {},
+          'urn:mrn:imo:mmsi:111111111': {
+            navigation: {
+              position: {
+                value: { latitude: 1, longitude: 1 },
+                timestamp: oldTimestamp,
+              },
+            },
+          },
+          'urn:mrn:imo:mmsi:222222222': {
+            navigation: {
+              position: {
+                value: { latitude: 2, longitude: 2 },
+                timestamp: recentTimestamp,
+              },
+            },
+          },
+        }),
+      } as Response);
+
+      const result = await client.getAISTargets();
 
       expect(result.targets).toHaveLength(1);
-      expect(result.targets[0].mmsi).toBe('recent.target');
+      expect(result.targets[0].mmsi).toBe('222222222');
     });
 
     test('should handle malformed notification values', () => {
@@ -832,8 +1061,14 @@ describe('SignalKClient', () => {
       client = new SignalKClient();
     });
 
-    test('should format vessel state with empty data correctly', () => {
-      const result = client.getVesselState();
+    test('should format vessel state with empty data correctly', async () => {
+      // Mock HTTP response with empty vessel data
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({}),
+      } as Response);
+
+      const result = await client.getVesselState();
 
       expect(result.connected).toBe(false);
       expect(result.context).toBe('vessels.self');
@@ -842,8 +1077,14 @@ describe('SignalKClient', () => {
       expect(typeof result.timestamp).toBe('string');
     });
 
-    test('should format AIS targets with empty data correctly', () => {
-      const result = client.getAISTargets();
+    test('should format AIS targets with empty data correctly', async () => {
+      // Mock HTTP response with no vessels
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ self: {} }),
+      } as Response);
+
+      const result = await client.getAISTargets();
 
       expect(result.connected).toBe(false);
       expect(result.count).toBe(0);
@@ -851,8 +1092,14 @@ describe('SignalKClient', () => {
       expect(result.timestamp).toBeDefined();
     });
 
-    test('should format active alarms with empty data correctly', () => {
-      const result = client.getActiveAlarms();
+    test('should format active alarms with empty data correctly', async () => {
+      // Mock HTTP response with no notifications
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({}),
+      } as Response);
+
+      const result = await client.getActiveAlarms();
 
       expect(result.connected).toBe(false);
       expect(result.count).toBe(0);
@@ -875,6 +1122,8 @@ describe('SignalKClient', () => {
     });
   });
 
+  // Initial State Fetching tests removed - no longer fetching data on connect
+  /*
   describe('Initial State Fetching', () => {
     beforeEach(() => {
       client = new SignalKClient({ hostname: 'test.example.com', port: 3000 });
@@ -885,7 +1134,7 @@ describe('SignalKClient', () => {
       // Mock successful HTTP response
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({
+        json: () => Promise.resolve({
           navigation: {
             position: {
               value: { latitude: 37.8199, longitude: -122.4783 },
@@ -1046,7 +1295,7 @@ describe('SignalKClient', () => {
       // Mock complex nested response
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({
+        json: () => Promise.resolve({
           electrical: {
             batteries: {
               house: {
@@ -1125,7 +1374,7 @@ describe('SignalKClient', () => {
       // Mock response with null/undefined values
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({
+        json: () => Promise.resolve({
           navigation: {
             position: null,
             heading: undefined,
@@ -1166,6 +1415,7 @@ describe('SignalKClient', () => {
       );
     });
   });
+  */
 
   describe('Console Output and Event Handling', () => {
     beforeEach(() => {
@@ -1284,28 +1534,31 @@ describe('SignalKClient', () => {
       expect(target?.lastUpdate).toBe('2023-06-22T10:30:15.000Z');
     });
 
-    test('should handle vessel state with undefined/invalid paths', () => {
-      // Add some invalid paths to test filtering
-      client.latestValues.set('vessels.self.undefined', {
-        value: 'test',
-        timestamp: '2023-06-22T10:30:15.000Z',
-      });
+    test('should handle vessel state with undefined/invalid paths', async () => {
+      // Mock HTTP response with some invalid/empty paths
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          undefined: {
+            value: 'test',
+            timestamp: '2023-06-22T10:30:15.000Z',
+          },
+          '': {
+            value: 'empty',
+            timestamp: '2023-06-22T10:30:15.000Z',
+          },
+          valid: {
+            path: {
+              value: 'good',
+              timestamp: '2023-06-22T10:30:15.000Z',
+            },
+          },
+        }),
+      } as Response);
 
-      client.latestValues.set('vessels.self.', {
-        value: 'empty',
-        timestamp: '2023-06-22T10:30:15.000Z',
-      });
+      const state = await client.getVesselState();
 
-      client.latestValues.set('vessels.self.valid.path', {
-        value: 'good',
-        timestamp: '2023-06-22T10:30:15.000Z',
-      });
-
-      const state = client.getVesselState();
-
-      // Should only include valid paths
-      expect(state.data['undefined']).toBeUndefined();
-      expect(state.data['']).toBeUndefined();
+      // Should include the paths as returned by the API
       expect(state.data['valid.path']).toBeDefined();
       expect(state.data['valid.path'].value).toBe('good');
     });
@@ -1316,13 +1569,55 @@ describe('SignalKClient', () => {
       client = new SignalKClient({ hostname: 'test.example.com', port: 3000 });
     });
 
+    test('should handle HTTP error in getVesselState', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+      } as Response);
+
+      const result = await client.getVesselState();
+
+      expect(result.connected).toBe(false);
+      expect(result.data).toEqual({});
+      expect(result.error).toContain('Failed to fetch vessel state');
+    });
+
+    test('should handle HTTP error in getAISTargets', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+      } as Response);
+
+      const result = await client.getAISTargets();
+
+      expect(result.connected).toBe(false);
+      expect(result.count).toBe(0);
+      expect(result.targets).toEqual([]);
+      expect(result.error).toContain('Failed to fetch AIS targets');
+    });
+
+    test('should handle HTTP error in getActiveAlarms', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        statusText: 'Forbidden',
+      } as Response);
+
+      const result = await client.getActiveAlarms();
+
+      expect(result.connected).toBe(false);
+      expect(result.count).toBe(0);
+      expect(result.alarms).toEqual([]);
+      expect(result.error).toContain('Failed to fetch alarms');
+    });
+
     test('should handle JSON parsing error in getPathValue', async () => {
       // Mock response with invalid JSON
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => {
-          throw new Error('Invalid JSON');
-        },
+        json: () => Promise.reject(new Error('Invalid JSON')),
       } as unknown as Response);
 
       // Mock console.error to verify error logging

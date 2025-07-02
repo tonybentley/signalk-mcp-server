@@ -23,6 +23,9 @@ declare global {
 // Global test timeout
 jest.setTimeout(10000);
 
+// Mock __dirname for ES modules in test environment
+global.__dirname = '/test/path/src';
+
 // Suppress console logs during tests unless explicitly testing them
 const originalConsoleError = console.error;
 const originalConsoleLog = console.log;

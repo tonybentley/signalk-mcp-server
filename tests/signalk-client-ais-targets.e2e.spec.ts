@@ -8,10 +8,15 @@
 
 import { describe, test, expect, beforeAll, afterAll } from '@jest/globals';
 import { SignalKClient } from '../src/signalk-client.js';
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 
 // Load environment configuration
 dotenv.config();
+
+// Test utilities
+const testUtils = {
+  waitFor: (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+};
 
 describe('SignalK Client getAISTargets - Live Integration', () => {
   let client: SignalKClient;
@@ -64,11 +69,11 @@ describe('SignalK Client getAISTargets - Live Integration', () => {
     await testUtils.waitFor(AIS_COLLECTION_TIMEOUT);
 
     // Get initial AIS targets
-    const aisTargets1 = client.getAISTargets();
+    const aisTargets1 = await client.getAISTargets();
 
     // Wait for potential updates and get second snapshot
     await testUtils.waitFor(5000);
-    const aisTargets2 = client.getAISTargets();
+    const aisTargets2 = await client.getAISTargets();
 
     // Validate basic response structure
     expect(aisTargets1).toBeDefined();
@@ -175,11 +180,11 @@ describe('SignalK Client getAISTargets - Live Integration', () => {
     const serialized = JSON.stringify(aisTargets2);
     expect(serialized.length).toBeLessThan(500000); // < 500KB for AIS data
 
-    // Performance test - should be fast (cached data)
+    // Performance test - should be reasonable (HTTP request)
     const startTime = Date.now();
-    client.getAISTargets();
+    await client.getAISTargets();
     const responseTime = Date.now() - startTime;
-    expect(responseTime).toBeLessThan(100);
+    expect(responseTime).toBeLessThan(5000); // Allow up to 5s for HTTP request
 
     console.log(`AIS targets: ${aisTargets1.count} → ${aisTargets2.count}`);
     console.log(`Response time: ${responseTime}ms`);
@@ -193,9 +198,73 @@ describe('SignalK Client getAISTargets - Live Integration', () => {
     }
   }, 30000); // 30 second timeout for AIS data collection
 
+  test('should support pagination for AIS targets', async () => {
+    // Test pagination functionality
+    const allTargets = await client.getAISTargets();
+    const page1 = await client.getAISTargets(1, 5);
+    const page2 = await client.getAISTargets(2, 5);
+
+    // Validate pagination metadata
+    expect(allTargets.pagination).toBeDefined();
+    expect(allTargets.pagination?.page).toBe(1);
+    expect(allTargets.pagination?.pageSize).toBe(10);
+    
+    expect(page1.pagination).toBeDefined();
+    expect(page1.pagination?.page).toBe(1);
+    expect(page1.pagination?.pageSize).toBe(5);
+    expect(page1.count).toBeLessThanOrEqual(5);
+    
+    if (allTargets.count > 5) {
+      expect(page1.pagination?.hasNextPage).toBe(true);
+      expect(page2.pagination?.hasPreviousPage).toBe(true);
+    }
+    
+    console.log(
+      `Pagination test: ${allTargets.count} total targets, page 1: ${page1.count}, page 2: ${page2.count}`,
+    );
+  });
+
+  test('should include distance calculations when vessel position available', async () => {
+    // Get vessel state first to check if we have position
+    const vesselState = await client.getVesselState();
+    const hasPosition = vesselState.data['navigation.position']?.value?.latitude !== undefined;
+    
+    const aisTargets = await client.getAISTargets();
+    
+    if (hasPosition && aisTargets.count > 0) {
+      // Check targets with positions have distance
+      const targetsWithPosition = aisTargets.targets.filter(
+        target => target['navigation.position']?.value?.latitude !== undefined
+      );
+      
+      targetsWithPosition.forEach(target => {
+        expect(target.distanceMeters).toBeDefined();
+        expect(typeof target.distanceMeters).toBe('number');
+        expect(target.distanceMeters).toBeGreaterThanOrEqual(0);
+      });
+      
+      // Verify sorting by distance (closest first)
+      for (let i = 1; i < targetsWithPosition.length; i++) {
+        if (targetsWithPosition[i-1].distanceMeters !== undefined && 
+            targetsWithPosition[i].distanceMeters !== undefined) {
+          expect(targetsWithPosition[i-1].distanceMeters)
+            .toBeLessThanOrEqual(targetsWithPosition[i].distanceMeters!);
+        }
+      }
+      
+      console.log(
+        `Distance test: ${targetsWithPosition.length} targets with distance calculations`,
+      );
+    } else {
+      console.log(
+        `Distance test skipped: hasPosition=${hasPosition}, targetCount=${aisTargets.count}`,
+      );
+    }
+  });
+
   test('should handle empty AIS response gracefully', async () => {
     // This test verifies the method works even when no AIS targets are available
-    const aisTargets = client.getAISTargets();
+    const aisTargets = await client.getAISTargets();
 
     // Basic structure validation
     expect(aisTargets).toBeDefined();
@@ -205,6 +274,7 @@ describe('SignalK Client getAISTargets - Live Integration', () => {
     expect(aisTargets.targets).toBeDefined();
     expect(Array.isArray(aisTargets.targets)).toBe(true);
     expect(aisTargets.timestamp).toBeDefined();
+    expect(aisTargets.pagination).toBeDefined();
 
     // Count should match array length
     expect(aisTargets.count).toBe(aisTargets.targets.length);
@@ -212,11 +282,11 @@ describe('SignalK Client getAISTargets - Live Integration', () => {
     // Should be JSON serializable
     expect(() => JSON.stringify(aisTargets)).not.toThrow();
 
-    // Performance should be good even with no data
+    // Performance should be reasonable even with no data
     const startTime = Date.now();
-    client.getAISTargets();
+    await client.getAISTargets();
     const responseTime = Date.now() - startTime;
-    expect(responseTime).toBeLessThan(50);
+    expect(responseTime).toBeLessThan(5000); // Allow up to 5s for HTTP request
 
     console.log(
       `Empty AIS response test: ${aisTargets.count} targets, ${responseTime}ms response time`,

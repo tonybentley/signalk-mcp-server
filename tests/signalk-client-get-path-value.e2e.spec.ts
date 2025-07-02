@@ -9,10 +9,15 @@
 
 import { describe, test, expect, beforeAll, afterAll } from '@jest/globals';
 import { SignalKClient } from '../src/signalk-client.js';
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 
 // Load environment configuration
 dotenv.config();
+
+// Test utilities
+const testUtils = {
+  waitFor: (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+};
 
 describe('SignalK Client getPathValue - Live Integration', () => {
   let client: SignalKClient;

@@ -12,6 +12,18 @@ import { SignalKClient } from './signalk-client.js';
 import type { MCPToolResponse, MCPResource } from './types/index.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+// Get __dirname equivalent for ES modules
+let currentDirname: string;
+try {
+  // Try ES module approach
+  const currentFilename = fileURLToPath(import.meta.url);
+  currentDirname = path.dirname(currentFilename);
+} catch {
+  // Fallback for test environment
+  currentDirname = typeof __dirname !== 'undefined' ? __dirname : '/test/path/src';
+}
 
 export interface SignalKMCPServerOptions {
   serverName?: string;
@@ -110,14 +122,15 @@ export class SignalKMCPServer {
     );
 
     // Setup resources directory
-    // Use process.cwd() approach that works in both Node.js and Jest environments
-    const cwd = process.cwd();
-    if (cwd.includes('dist')) {
-      // Running from built dist directory
-      this.resourcesDir = path.join(cwd, '..', 'resources');
+    // Use currentDirname to find the resources directory relative to this file
+    // When compiled, this file is at dist/src/signalk-mcp-server.js
+    // Resources are at project-root/resources
+    if (currentDirname.includes('dist')) {
+      // Running from built dist directory - go up 2 levels from dist/src
+      this.resourcesDir = path.join(currentDirname, '..', '..', 'resources');
     } else {
-      // Running from source directory or project root
-      this.resourcesDir = path.join(cwd, 'resources');
+      // Running from source directory - go up 1 level from src
+      this.resourcesDir = path.join(currentDirname, '..', 'resources');
     }
 
     this.setupToolHandlers();
@@ -227,7 +240,7 @@ export class SignalKMCPServer {
    * // - get_path_value({"path": "navigation.position"})
    */
   setupToolHandlers(): void {
-    this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
+    this.server.setRequestHandler(ListToolsRequestSchema, () => ({
       tools: [
         {
           name: 'get_vessel_state',
@@ -241,10 +254,22 @@ export class SignalKMCPServer {
         },
         {
           name: 'get_ais_targets',
-          description: 'Get nearby AIS targets with position and course data',
+          description: 'Get nearby AIS targets sorted by distance from self vessel (closest first). Includes distance in meters, position, course, and speed data.',
           inputSchema: {
             type: 'object',
-            properties: {},
+            properties: {
+              page: {
+                type: 'number',
+                description: 'Page number (1-based, default: 1)',
+                minimum: 1,
+              },
+              pageSize: {
+                type: 'number',
+                description: 'Number of targets per page (default: 10, max: 50)',
+                minimum: 1,
+                maximum: 50,
+              },
+            },
             additionalProperties: false,
           },
         },
@@ -313,7 +338,7 @@ export class SignalKMCPServer {
             case 'get_vessel_state':
               return await this.getVesselState();
             case 'get_ais_targets':
-              return await this.getAISTargets();
+              return await this.getAISTargets(args.page, args.pageSize);
             case 'get_active_alarms':
               return await this.getActiveAlarms();
             case 'list_available_paths':
@@ -453,7 +478,7 @@ export class SignalKMCPServer {
    * // }
    */
   async getVesselState(): Promise<MCPToolResponse> {
-    const data = await this.signalkClient.getVesselStateWithIdentity();
+    const data = await this.signalkClient.getVesselState();
     return {
       content: [
         {
@@ -468,17 +493,21 @@ export class SignalKMCPServer {
    * MCP tool handler that returns nearby AIS targets (other vessels) with position and navigation data
    *
    * Response format:
-   * - JSON text content with AIS target array
+   * - JSON text content with AIS target array sorted by distance
+   * - Includes distance in meters from self vessel when positions available
+   * - Supports pagination with configurable page size
    * - Filtered to targets updated within last 5 minutes
-   * - Limited to 50 targets to prevent overwhelming responses
+   * - Maximum 50 targets per page
    * - Includes MMSI, position, course, speed, and vessel identification
    *
+   * @param page - Page number (1-based, default: 1)
+   * @param pageSize - Number of targets per page (default: 10, max: 50)
    * @returns MCPToolResponse with AIS targets as formatted JSON text
    *
    * @example
    * // Called by AI agents via MCP protocol:
    * // Tool: get_ais_targets
-   * // Arguments: {}
+   * // Arguments: {"page": 1, "pageSize": 10}
    *
    * // Response content:
    * // {
@@ -488,16 +517,25 @@ export class SignalKMCPServer {
    * //   "targets": [
    * //     {
    * //       "mmsi": "123456789",
+   * //       "distanceMeters": 1852.5,
    * //       "navigation.position": {"latitude": 37.8200, "longitude": -122.4800},
    * //       "navigation.courseOverGround": 45.0,
    * //       "navigation.speedOverGround": 8.5,
    * //       "lastUpdate": "2023-06-22T10:29:45.000Z"
    * //     }
-   * //   ]
+   * //   ],
+   * //   "pagination": {
+   * //     "page": 1,
+   * //     "pageSize": 10,
+   * //     "totalCount": 15,
+   * //     "totalPages": 2,
+   * //     "hasNextPage": true,
+   * //     "hasPreviousPage": false
+   * //   }
    * // }
    */
-  async getAISTargets(): Promise<MCPToolResponse> {
-    const data = this.signalkClient.getAISTargets();
+  async getAISTargets(page?: number, pageSize?: number): Promise<MCPToolResponse> {
+    const data = await this.signalkClient.getAISTargets(page, pageSize);
     return {
       content: [
         {
@@ -546,7 +584,7 @@ export class SignalKMCPServer {
    * // }
    */
   async getActiveAlarms(): Promise<MCPToolResponse> {
-    const data = this.signalkClient.getActiveAlarms();
+    const data = await this.signalkClient.getActiveAlarms();
     return {
       content: [
         {
@@ -694,7 +732,7 @@ export class SignalKMCPServer {
    * //   "timestamp": "2023-06-22T10:30:15.123Z"
    * // }
    */
-  async getConnectionStatus(): Promise<MCPToolResponse> {
+  getConnectionStatus(): MCPToolResponse {
     const data = this.signalkClient.getConnectionStatus();
     return {
       content: [
