@@ -299,3 +299,4 @@ dist/                           # Compiled JavaScript output
 - Additions or changes should have corresponding e2e tests that validate the tools
 - Run the ci:full script to verify changes are ready and complete
 - Run the github action using act to verify changes are ready and complete
+- Remove artifacts used for testing that are not part of the unit or end to end tests

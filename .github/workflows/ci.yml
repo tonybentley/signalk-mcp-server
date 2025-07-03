@@ -14,6 +14,17 @@ jobs:
       matrix:
         node-version: [18.x, 20.x, 22.x]
     
+    services:
+      signalk:
+        image: signalk/signalk-server:latest
+        ports:
+          - 3000:3000
+        options: >-
+          --health-cmd "curl -f http://localhost:3000/signalk || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
     steps:
     - uses: actions/checkout@v4
     
@@ -26,8 +37,18 @@ jobs:
     - name: Install dependencies
       run: npm ci
     
+    - name: Wait for SignalK server to be ready
+      run: |
+        timeout 30s bash -c 'until curl -f http://localhost:3000/signalk/v1/api/; do sleep 2; done'
+    
     - name: Run CI Full Pipeline
       run: npm run ci:full
+      env:
+        SIGNALK_HOST: localhost
+        SIGNALK_PORT: 3000
+        SIGNALK_TLS: false
+        SIGNALK_CONTEXT: vessels.self
+        NODE_ENV: test
     
     - name: Upload coverage reports
       if: matrix.node-version == '20.x'
