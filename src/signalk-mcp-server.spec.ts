@@ -22,6 +22,11 @@ jest.mock('url', () => ({
   fileURLToPath: jest.fn(() => '/mocked/path/src/signalk-mcp-server.ts'),
 }));
 
+// Mock the path utils to avoid import.meta issues
+jest.mock('./utils/path-utils.js', () => ({
+  getCurrentDirname: jest.fn(() => '/mocked/path/src'),
+}));
+
 // Mock path module  
 jest.mock('path', () => ({
   dirname: jest.fn((p: string) => p.replace(/\/[^/]+$/, '')),
@@ -138,7 +143,7 @@ describe('SignalKMCPServer', () => {
       const onCalls = mockSignalKClient.on.mock.calls;
       const errorCall = onCalls.find((call: any[]) => call[0] === 'error');
       expect(errorCall).toBeDefined();
-      expect(typeof errorCall[1]).toBe('function');
+      expect(typeof errorCall?.[1]).toBe('function');
     });
 
     test('should initialize with custom options', () => {
@@ -175,7 +180,7 @@ describe('SignalKMCPServer', () => {
       const errorOnCalls = mockSignalKClient.on.mock.calls;
       const errorHandlerCall = errorOnCalls.find((call: any[]) => call[0] === 'error');
       expect(errorHandlerCall).toBeDefined();
-      expect(typeof errorHandlerCall[1]).toBe('function');
+      expect(typeof errorHandlerCall?.[1]).toBe('function');
 
       // Test the error handler
       const errorHandler = mockSignalKClient.on.mock.calls[0][1];
@@ -201,6 +206,9 @@ describe('SignalKMCPServer', () => {
     test('should connect successfully and log success', async () => {
       mockSignalKClient.connect.mockResolvedValue(undefined);
       const server = new SignalKMCPServer();
+      
+      // Clear the mock calls from constructor
+      mockSignalKClient.connect.mockClear();
 
       await server.connectToSignalK();
 
@@ -243,7 +251,7 @@ describe('SignalKMCPServer', () => {
       const setHandlerCalls = mockServer.setRequestHandler.mock.calls;
       const listToolsCall = setHandlerCalls.find((call: any[]) => call[0] === 'ListToolsRequestSchema');
       expect(listToolsCall).toBeDefined();
-      expect(typeof listToolsCall[1]).toBe('function');
+      expect(typeof listToolsCall?.[1]).toBe('function');
     });
 
     test('should register call tool handler', () => {
@@ -252,7 +260,7 @@ describe('SignalKMCPServer', () => {
       const setHandlerCalls = mockServer.setRequestHandler.mock.calls;
       const callToolCall = setHandlerCalls.find((call: any[]) => call[0] === 'CallToolRequestSchema');
       expect(callToolCall).toBeDefined();
-      expect(typeof callToolCall[1]).toBe('function');
+      expect(typeof callToolCall?.[1]).toBe('function');
     });
 
     test('should return correct tools list', async () => {

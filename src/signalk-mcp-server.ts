@@ -12,18 +12,10 @@ import { SignalKClient } from './signalk-client.js';
 import type { MCPToolResponse, MCPResource } from './types/index.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { fileURLToPath } from 'url';
+import { getCurrentDirname } from './utils/path-utils.js';
 
 // Get __dirname equivalent for ES modules
-let currentDirname: string;
-try {
-  // Try ES module approach
-  const currentFilename = fileURLToPath(import.meta.url);
-  currentDirname = path.dirname(currentFilename);
-} catch {
-  // Fallback for test environment
-  currentDirname = typeof __dirname !== 'undefined' ? __dirname : '/test/path/src';
-}
+const currentDirname = getCurrentDirname();
 
 export interface SignalKMCPServerOptions {
   serverName?: string;
