@@ -327,8 +327,10 @@ The MCP server provides the following tools to AI agents:
 ### `get_vessel_state()`
 Returns current vessel navigation data including position, heading, speed, wind information, and vessel identity (name, MMSI). Combines delta message data with top-level SignalK properties for comprehensive vessel information.
 
-### `get_ais_targets()`  
-Retrieves nearby vessels from AIS with position, course, speed, and identification data.
+### `get_ais_targets(page?, pageSize?)`  
+Retrieves nearby vessels from AIS sorted by distance from self vessel (closest first). Returns position, course, speed, identification data, and distance in meters. Supports pagination with optional parameters:
+- `page`: Page number (1-based, default: 1)
+- `pageSize`: Number of targets per page (default: 10, max: 50)
 
 ### `get_active_alarms()`
 Returns current system notifications, alerts, and alarm states.

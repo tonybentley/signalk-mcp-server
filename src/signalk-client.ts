@@ -677,6 +677,32 @@ export class SignalKClient extends EventEmitter {
   }
 
   /**
+   * Pattern-based filtering for AIS data fields
+   * Determines if a SignalK path should be included in AIS target data
+   * 
+   * @param path - SignalK data path to check
+   * @returns true if the path should be included, false otherwise
+   */
+  private shouldIncludeAISPath(path: string): boolean {
+    // Include patterns for navigation-relevant data
+    const includePatterns = [
+      /^navigation\./,     // All navigation data (position, speed, course, heading, etc.)
+      /^design\./,         // Vessel characteristics (length, beam, type, etc.)
+      /^name$/,            // Vessel name (top-level)
+      /^communication\./,  // Call signs and communication identifiers
+      /^registrations\./,  // IMO numbers and other registrations
+      /^destination\./,    // Voyage-related information
+    ];
+
+    // Exclude patterns for internal vessel systems
+    // Note: We don't need explicit exclude patterns since we're using a whitelist approach
+    // Only paths matching include patterns will be included
+    
+    // Check if path matches any include pattern
+    return includePatterns.some(pattern => pattern.test(path));
+  }
+
+  /**
    * Returns nearby AIS targets (other vessels) with their position and navigation data
    *
    * This method fetches fresh AIS data directly from the SignalK HTTP API on each request,
@@ -739,8 +765,9 @@ export class SignalKClient extends EventEmitter {
       pageSize = Math.min(Math.max(1, pageSize), 50); // Clamp between 1 and 50
       page = Math.max(1, page);
 
-      // First, get self vessel position for distance calculation
+      // First, get self vessel position and MMSI for distance calculation and filtering
       let selfPosition: { latitude: number; longitude: number } | undefined = undefined;
+      let selfMmsi: string | undefined = undefined;
       try {
         const selfData = await this.getVesselState();
         const positionData = selfData.data['navigation.position'];
@@ -750,8 +777,12 @@ export class SignalKClient extends EventEmitter {
             'longitude' in positionData.value) {
           selfPosition = positionData.value as { latitude: number; longitude: number };
         }
-      } catch (error: any) {
-        // Failed to get self vessel position - continue without distance calculation
+        // Get self vessel's MMSI if available
+        if (selfData.data['mmsi'] && selfData.data['mmsi'].value) {
+          selfMmsi = String(selfData.data['mmsi'].value);
+        }
+      } catch {
+        // Failed to get self vessel data - continue without distance calculation
       }
 
       // Fetch all vessels from the API
@@ -780,6 +811,11 @@ export class SignalKClient extends EventEmitter {
         }
         
         const mmsi = mmsiMatch[1];
+        
+        // Skip if this MMSI matches self vessel's MMSI
+        if (selfMmsi && mmsi === selfMmsi) {
+          continue;
+        }
         const target: AISTarget = {
           mmsi: mmsi,
           lastUpdate: new Date().toISOString(),
@@ -799,9 +835,12 @@ export class SignalKClient extends EventEmitter {
             const path = prefix ? `${prefix}.${key}` : key;
             
             if (value && typeof value === 'object' && 'value' in value) {
-              target[path] = value;
+              // Only include paths that match our AIS data patterns
+              if (this.shouldIncludeAISPath(path)) {
+                target[path] = value;
+              }
               
-              // Capture position for distance calculation
+              // Always capture position for distance calculation (even if not included in output)
               if (path === 'navigation.position' && value.value && 
                   typeof value.value === 'object' && 
                   'latitude' in value.value && 
@@ -825,6 +864,11 @@ export class SignalKClient extends EventEmitter {
         };
         
         extractData(vesselData);
+        
+        // Handle top-level vessel properties that don't have value structure
+        if (vesselData && typeof vesselData === 'object' && 'name' in vesselData && this.shouldIncludeAISPath('name')) {
+          target.name = (vesselData as any).name;
+        }
         
         // Only include if data is less than 5 minutes old
         if (mostRecentTimestamp > 0 && (now - mostRecentTimestamp) < 300000) {

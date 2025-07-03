@@ -131,12 +131,30 @@ describe('SignalK Client getAISTargets - Live Integration', () => {
         expect(targetTimestamp).toBeGreaterThan(0); // Valid timestamp
         expect(isNaN(targetTimestamp)).toBe(false); // Not NaN
 
-        // Validate any vessel data if present (basic structure check)
+        // Validate any vessel data if present (pattern-based filtering check)
         for (const [key, value] of Object.entries(target)) {
-          if (key !== 'mmsi' && key !== 'lastUpdate' && key.length > 0) {
-            // Should be vessel data paths - basic validation only
+          if (key !== 'mmsi' && key !== 'lastUpdate' && key !== 'distanceMeters' && key !== 'name') {
+            // Should be vessel data paths - validate they match our include patterns
             expect(typeof key).toBe('string');
             expect(key.length).toBeGreaterThan(0);
+
+            // Key should match one of our include patterns
+            const isAllowedPath = 
+              key.startsWith('navigation.') ||
+              key.startsWith('design.') ||
+              key.startsWith('communication.') ||
+              key.startsWith('registrations.') ||
+              key.startsWith('destination.');
+            
+            expect(isAllowedPath).toBe(true);
+
+            // These paths should NOT be present (filtered out)
+            expect(key.startsWith('electrical.')).toBe(false);
+            expect(key.startsWith('tanks.')).toBe(false);
+            expect(key.startsWith('propulsion.')).toBe(false);
+            expect(key.startsWith('environment.')).toBe(false);
+            expect(key.startsWith('sensors.')).toBe(false);
+            expect(key.startsWith('performance.')).toBe(false);
 
             // Value should be defined (can be null but not undefined)
             expect(value).toBeDefined();
@@ -291,5 +309,57 @@ describe('SignalK Client getAISTargets - Live Integration', () => {
     console.log(
       `Empty AIS response test: ${aisTargets.count} targets, ${responseTime}ms response time`,
     );
+  });
+
+  test('should filter AIS data to include only navigation-relevant paths', async () => {
+    // Get AIS targets
+    const aisTargets = await client.getAISTargets();
+    
+    if (aisTargets.count > 0) {
+      console.log(`Testing pattern-based filtering on ${aisTargets.count} targets`);
+      
+      // Track which path types we found
+      const foundPaths = new Set<string>();
+      
+      for (const target of aisTargets.targets) {
+        // Core fields should always be present
+        expect(target.mmsi).toBeDefined();
+        expect(target.lastUpdate).toBeDefined();
+        
+        // Check all paths in the target
+        for (const key of Object.keys(target)) {
+          if (key !== 'mmsi' && key !== 'lastUpdate' && key !== 'distanceMeters' && key !== 'name') {
+            // Extract the path prefix
+            const pathPrefix = key.split('.')[0];
+            foundPaths.add(pathPrefix);
+            
+            // Verify this is an allowed path type
+            const allowedPrefixes = ['navigation', 'design', 'communication', 'registrations', 'destination'];
+            expect(allowedPrefixes).toContain(pathPrefix);
+          }
+        }
+      }
+      
+      console.log(`Found path prefixes: ${Array.from(foundPaths).join(', ')}`);
+      
+      // Log sample target structure for debugging
+      const sampleTarget = aisTargets.targets[0];
+      const sampleKeys = Object.keys(sampleTarget).sort();
+      console.log(`Sample target keys: ${sampleKeys.join(', ')}`);
+      
+      // Verify data is compact (no internal systems data)
+      const serializedTarget = JSON.stringify(sampleTarget);
+      expect(serializedTarget.length).toBeLessThan(5000); // Each target should be < 5KB
+      
+      // Ensure no internal vessel systems data is present
+      const serializedAll = JSON.stringify(aisTargets);
+      expect(serializedAll).not.toContain('electrical.');
+      expect(serializedAll).not.toContain('tanks.');
+      expect(serializedAll).not.toContain('propulsion.');
+      expect(serializedAll).not.toContain('sensors.');
+      expect(serializedAll).not.toContain('performance.');
+    } else {
+      console.log('No AIS targets available for filtering test');
+    }
   });
 });

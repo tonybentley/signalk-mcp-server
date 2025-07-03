@@ -417,16 +417,55 @@ describe('SignalKClient', () => {
         }),
       } as Response);
       
-      // Mock HTTP response for vessels
+      // Mock HTTP response for vessels with mixed data
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
           self: {},
           'urn:mrn:imo:mmsi:123456789': {
+            name: 'Test Vessel',
             navigation: {
               position: {
                 value: { latitude: 37.82, longitude: -122.48 },
                 timestamp: currentTimestamp,
+              },
+              speedOverGround: {
+                value: 5.2,
+                timestamp: currentTimestamp,
+              },
+            },
+            design: {
+              length: {
+                value: { overall: 12 },
+              },
+              aisShipType: {
+                value: { id: 36, name: 'Sailing' },
+              },
+            },
+            communication: {
+              callsignVhf: {
+                value: 'TEST123',
+              },
+            },
+            // These should be filtered out
+            electrical: {
+              batteries: {
+                house: {
+                  voltage: {
+                    value: 12.6,
+                    timestamp: currentTimestamp,
+                  },
+                },
+              },
+            },
+            tanks: {
+              freshWater: {
+                0: {
+                  currentLevel: {
+                    value: 0.8,
+                    timestamp: currentTimestamp,
+                  },
+                },
               },
             },
           },
@@ -438,12 +477,93 @@ describe('SignalKClient', () => {
       expect(targets.connected).toBe(false);
       expect(targets.count).toBe(1);
       expect(targets.targets).toHaveLength(1);
-      expect(targets.targets[0].mmsi).toBe('123456789');
-      expect(targets.targets[0].distanceMeters).toBeDefined();
-      expect(targets.targets[0].distanceMeters).toBeGreaterThan(0);
+      
+      const target = targets.targets[0];
+      expect(target.mmsi).toBe('123456789');
+      expect(target.name).toBe('Test Vessel');
+      expect(target.distanceMeters).toBeDefined();
+      expect(target.distanceMeters).toBeGreaterThan(0);
+      
+      // Verify included paths
+      expect(target['navigation.position']).toBeDefined();
+      expect(target['navigation.speedOverGround']).toBeDefined();
+      expect(target['design.length']).toBeDefined();
+      expect(target['design.aisShipType']).toBeDefined();
+      expect(target['communication.callsignVhf']).toBeDefined();
+      
+      // Verify excluded paths
+      expect(target['electrical.batteries.house.voltage']).toBeUndefined();
+      expect(target['tanks.freshWater.0.currentLevel']).toBeUndefined();
+      
       expect(targets.pagination).toBeDefined();
       expect(targets.pagination?.page).toBe(1);
       expect(targets.pagination?.pageSize).toBe(10);
+    });
+
+    test('should exclude self vessel from AIS targets', async () => {
+      const currentTimestamp = new Date().toISOString();
+      
+      // Mock self vessel data with MMSI
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          navigation: {
+            position: {
+              value: { latitude: 37.81, longitude: -122.47 },
+              timestamp: currentTimestamp,
+            },
+          },
+          mmsi: '338123456',
+        }),
+      } as Response);
+      
+      // Mock vessels including self appearing twice
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          self: {
+            navigation: {
+              position: {
+                value: { latitude: 37.81, longitude: -122.47 },
+                timestamp: currentTimestamp,
+              },
+            },
+            mmsi: '338123456',
+          },
+          'urn:mrn:imo:mmsi:338123456': {
+            navigation: {
+              position: {
+                value: { latitude: 37.81, longitude: -122.47 },
+                timestamp: currentTimestamp,
+              },
+            },
+          },
+          'urn:mrn:imo:mmsi:123456789': {
+            navigation: {
+              position: {
+                value: { latitude: 37.82, longitude: -122.48 },
+                timestamp: currentTimestamp,
+              },
+            },
+          },
+          'urn:mrn:signalk:uuid:some-uuid': {
+            navigation: {
+              position: {
+                value: { latitude: 37.83, longitude: -122.49 },
+                timestamp: currentTimestamp,
+              },
+            },
+          },
+        }),
+      } as Response);
+
+      const targets = await client.getAISTargets();
+
+      expect(targets.connected).toBe(false);
+      expect(targets.count).toBe(1); // Only the non-self MMSI target
+      expect(targets.targets).toHaveLength(1);
+      expect(targets.targets[0].mmsi).toBe('123456789');
+      expect(targets.targets[0].mmsi).not.toBe('338123456'); // Not self MMSI
     });
 
     test('should filter old AIS targets', async () => {
@@ -1799,6 +1919,32 @@ describe('SignalKClient', () => {
       expect(target).toBeDefined();
       expect(target?.['navigation.courseOverGround']).toBe(45.0);
       expect(target?.lastUpdate).toBe('2023-06-22T10:30:15.000Z');
+    });
+
+    test('should filter AIS data paths correctly using pattern matching', () => {
+      // Test included paths
+      expect((client as any).shouldIncludeAISPath('navigation.position')).toBe(true);
+      expect((client as any).shouldIncludeAISPath('navigation.speedOverGround')).toBe(true);
+      expect((client as any).shouldIncludeAISPath('navigation.courseOverGroundTrue')).toBe(true);
+      expect((client as any).shouldIncludeAISPath('design.length')).toBe(true);
+      expect((client as any).shouldIncludeAISPath('design.aisShipType')).toBe(true);
+      expect((client as any).shouldIncludeAISPath('design.beam')).toBe(true);
+      expect((client as any).shouldIncludeAISPath('name')).toBe(true);
+      expect((client as any).shouldIncludeAISPath('communication.callsignVhf')).toBe(true);
+      expect((client as any).shouldIncludeAISPath('registrations.imo')).toBe(true);
+      expect((client as any).shouldIncludeAISPath('destination.commonName')).toBe(true);
+      
+      // Test excluded paths
+      expect((client as any).shouldIncludeAISPath('electrical.batteries.house.voltage')).toBe(false);
+      expect((client as any).shouldIncludeAISPath('tanks.freshWater.0.currentLevel')).toBe(false);
+      expect((client as any).shouldIncludeAISPath('propulsion.main.temperature')).toBe(false);
+      expect((client as any).shouldIncludeAISPath('environment.inside.temperature')).toBe(false);
+      expect((client as any).shouldIncludeAISPath('sensors.gps.fromBow')).toBe(false);
+      expect((client as any).shouldIncludeAISPath('performance.polarSpeed')).toBe(false);
+      
+      // Test edge cases
+      expect((client as any).shouldIncludeAISPath('')).toBe(false);
+      expect((client as any).shouldIncludeAISPath('unknown.path')).toBe(false);
     });
   });
 });

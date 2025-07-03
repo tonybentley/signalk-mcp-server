@@ -83,7 +83,7 @@ SIGNALK_TLS=true
 ## MCP TOOLS IMPLEMENTED
 1. get_initial_context() -> **Start here!** Returns comprehensive SignalK documentation and context for AI agents
 2. get_vessel_state() -> Returns current position, heading, speed, wind data, and vessel identity (name, MMSI) - **Always fetches fresh data via HTTP**
-3. get_ais_targets() -> Returns nearby vessels from AIS with position/course/speed - **Always fetches fresh data via HTTP**
+3. get_ais_targets(page?, pageSize?) -> Returns nearby vessels from AIS sorted by distance with position/course/speed and distance in meters - **Always fetches fresh data via HTTP, supports pagination**
 4. get_active_alarms() -> Returns current system notifications and alerts - **Always fetches fresh data via HTTP**
 5. list_available_paths() -> Discovers what SignalK data paths are available
 6. get_path_value(path) -> Get latest value for any specific SignalK path
