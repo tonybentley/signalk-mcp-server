@@ -77,7 +77,7 @@ describe('SignalK Client getConnectionStatus - Live Integration', () => {
     // URLs should be properly formatted
     expect(status.url).toBeDefined();
     expect(typeof status.url).toBe('string');
-    expect(status.url).toMatch(/^wss?:\/\/.+:\d+$/);
+    expect(status.url).toMatch(/^(https?|wss?):\/\/.+:\d+$/); // Accept both HTTP and WebSocket URLs
 
     expect(status.wsUrl).toBeDefined();
     expect(typeof status.wsUrl).toBe('string');
@@ -98,7 +98,7 @@ describe('SignalK Client getConnectionStatus - Live Integration', () => {
     const expectedHttpProtocol = status.useTLS ? 'https://' : 'http://';
     const expectedBase = `${status.hostname}:${status.port}`;
 
-    expect(status.url).toBe(`${expectedProtocol}${expectedBase}`);
+    expect(status.url).toBe(`${expectedHttpProtocol}${expectedBase}`); // url field now returns HTTP URL
     expect(status.wsUrl).toBe(`${expectedProtocol}${expectedBase}`);
     expect(status.httpUrl).toBe(`${expectedHttpProtocol}${expectedBase}`);
 
