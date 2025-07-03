@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/unbound-method */
 /**
  * SignalKMCPServer Unit Tests
  *
@@ -134,10 +135,10 @@ describe('SignalKMCPServer', () => {
 
       expect(MockedSignalKClient).toHaveBeenCalledWith();
       expect(mockServer.setRequestHandler).toHaveBeenCalledTimes(4); // 2 for tools + 2 for resources
-      expect(mockSignalKClient.on).toHaveBeenCalledWith(
-        'error',
-        expect.any(Function),
-      );
+      const onCalls = mockSignalKClient.on.mock.calls;
+      const errorCall = onCalls.find((call: any[]) => call[0] === 'error');
+      expect(errorCall).toBeDefined();
+      expect(typeof errorCall[1]).toBe('function');
     });
 
     test('should initialize with custom options', () => {
@@ -171,10 +172,10 @@ describe('SignalKMCPServer', () => {
     test('should set up error handler for SignalK client', () => {
       new SignalKMCPServer();
 
-      expect(mockSignalKClient.on).toHaveBeenCalledWith(
-        'error',
-        expect.any(Function),
-      );
+      const errorOnCalls = mockSignalKClient.on.mock.calls;
+      const errorHandlerCall = errorOnCalls.find((call: any[]) => call[0] === 'error');
+      expect(errorHandlerCall).toBeDefined();
+      expect(typeof errorHandlerCall[1]).toBe('function');
 
       // Test the error handler
       const errorHandler = mockSignalKClient.on.mock.calls[0][1];
@@ -192,7 +193,7 @@ describe('SignalKMCPServer', () => {
 
       new SignalKMCPServer();
 
-      expect(mockSignalKClient.connect).toHaveBeenCalled();
+      expect(mockSignalKClient.connect).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -203,7 +204,7 @@ describe('SignalKMCPServer', () => {
 
       await server.connectToSignalK();
 
-      expect(mockSignalKClient.connect).toHaveBeenCalled();
+      expect(mockSignalKClient.connect).toHaveBeenCalledTimes(1);
       expect(consoleErrorSpy).toHaveBeenCalledWith(
         'SignalK client connected successfully',
       );
@@ -239,26 +240,26 @@ describe('SignalKMCPServer', () => {
     test('should register list tools handler', () => {
       new SignalKMCPServer();
 
-      expect(mockServer.setRequestHandler).toHaveBeenCalledWith(
-        'ListToolsRequestSchema',
-        expect.any(Function),
-      );
+      const setHandlerCalls = mockServer.setRequestHandler.mock.calls;
+      const listToolsCall = setHandlerCalls.find((call: any[]) => call[0] === 'ListToolsRequestSchema');
+      expect(listToolsCall).toBeDefined();
+      expect(typeof listToolsCall[1]).toBe('function');
     });
 
     test('should register call tool handler', () => {
       new SignalKMCPServer();
 
-      expect(mockServer.setRequestHandler).toHaveBeenCalledWith(
-        'CallToolRequestSchema',
-        expect.any(Function),
-      );
+      const setHandlerCalls = mockServer.setRequestHandler.mock.calls;
+      const callToolCall = setHandlerCalls.find((call: any[]) => call[0] === 'CallToolRequestSchema');
+      expect(callToolCall).toBeDefined();
+      expect(typeof callToolCall[1]).toBe('function');
     });
 
     test('should return correct tools list', async () => {
       new SignalKMCPServer();
 
       const listToolsHandler = mockServer.setRequestHandler.mock
-        .calls[0][1] as Function;
+        .calls[0][1] as () => any;
       const result = await listToolsHandler();
 
       expect(result.tools).toHaveLength(7);
@@ -283,12 +284,12 @@ describe('SignalKMCPServer', () => {
   });
 
   describe('Tool execution', () => {
-    let callToolHandler: Function;
+    let callToolHandler: (request: any) => Promise<any>;
 
     beforeEach(() => {
       new SignalKMCPServer();
       callToolHandler = mockServer.setRequestHandler.mock
-        .calls[1][1] as Function;
+        .calls[1][1] as (request: any) => Promise<any>;
     });
 
     test('should execute get_vessel_state tool', async () => {
@@ -306,7 +307,7 @@ describe('SignalKMCPServer', () => {
 
       const result = await callToolHandler(request);
 
-      expect(mockSignalKClient.getVesselState).toHaveBeenCalled();
+      expect(mockSignalKClient.getVesselState).toHaveBeenCalledTimes(1);
       expect(result.content[0].type).toBe('text');
       expect(JSON.parse(result.content[0].text)).toEqual(mockData);
     });
@@ -382,7 +383,7 @@ describe('SignalKMCPServer', () => {
 
       const result = await callToolHandler(request);
 
-      expect(mockSignalKClient.getActiveAlarms).toHaveBeenCalled();
+      expect(mockSignalKClient.getActiveAlarms).toHaveBeenCalledTimes(1);
       expect(JSON.parse(result.content[0].text)).toEqual(mockData);
     });
 
@@ -401,7 +402,7 @@ describe('SignalKMCPServer', () => {
 
       const result = await callToolHandler(request);
 
-      expect(mockSignalKClient.listAvailablePaths).toHaveBeenCalled();
+      expect(mockSignalKClient.listAvailablePaths).toHaveBeenCalledTimes(1);
       expect(JSON.parse(result.content[0].text)).toEqual(mockData);
     });
 
@@ -452,7 +453,7 @@ describe('SignalKMCPServer', () => {
 
       const result = await callToolHandler(request);
 
-      expect(mockSignalKClient.getConnectionStatus).toHaveBeenCalled();
+      expect(mockSignalKClient.getConnectionStatus).toHaveBeenCalledTimes(1);
       expect(JSON.parse(result.content[0].text)).toEqual(mockData);
     });
 
@@ -579,7 +580,7 @@ describe('SignalKMCPServer', () => {
       expect(JSON.parse(result.content[0].text)).toEqual(mockData);
     });
 
-    test('getConnectionStatus should return formatted response', async () => {
+    test('getConnectionStatus should return formatted response', () => {
       const mockData = {
         connected: false,
         hostname: 'localhost',
@@ -596,14 +597,14 @@ describe('SignalKMCPServer', () => {
       };
       mockSignalKClient.getConnectionStatus.mockReturnValue(mockData);
 
-      const result = await server.getConnectionStatus();
+      const result = server.getConnectionStatus();
 
       expect(result.content[0].type).toBe('text');
       expect(JSON.parse(result.content[0].text)).toEqual(mockData);
     });
 
-    test('getInitialContext should return formatted response', async () => {
-      const result = await server.getInitialContext();
+    test('getInitialContext should return formatted response', () => {
+      const result = server.getInitialContext();
 
       expect(result.content[0].type).toBe('text');
       const parsedResult = JSON.parse(result.content[0].text);

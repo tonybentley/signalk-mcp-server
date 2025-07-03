@@ -1793,7 +1793,7 @@ describe('SignalKClient', () => {
         .mockImplementation(() => {});
 
       // Mock emit to throw an error to trigger line 336
-      const originalEmit = client.emit;
+      const originalEmit = client.emit.bind(client);
       client.emit = jest.fn().mockImplementation(() => {
         throw new Error('Emit error');
       }) as any;

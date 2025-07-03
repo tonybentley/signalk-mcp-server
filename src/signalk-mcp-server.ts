@@ -346,9 +346,9 @@ export class SignalKMCPServer {
             case 'get_path_value':
               return await this.getPathValue(args.path);
             case 'get_connection_status':
-              return await this.getConnectionStatus();
+              return this.getConnectionStatus();
             case 'get_initial_context':
-              return await this.getInitialContext();
+              return this.getInitialContext();
             default:
               throw new McpError(
                 ErrorCode.MethodNotFound,
@@ -375,7 +375,7 @@ export class SignalKMCPServer {
    * - MCP tool reference
    */
   setupResourceHandlers(): void {
-    this.server.setRequestHandler(ListResourcesRequestSchema, async () => {
+    this.server.setRequestHandler(ListResourcesRequestSchema, () => {
       const resources: MCPResource[] = [
         // Reference resources
         {
@@ -411,7 +411,7 @@ export class SignalKMCPServer {
 
     this.server.setRequestHandler(
       ReadResourceRequestSchema,
-      async (request: any): Promise<any> => {
+      (request: any): any => {
         const { uri } = request.params;
 
         try {
@@ -783,7 +783,7 @@ export class SignalKMCPServer {
    * //   }
    * // }
    */
-  async getInitialContext(): Promise<MCPToolResponse> {
+  getInitialContext(): MCPToolResponse {
     const contextData: Record<string, any> = {
       server_info: {
         name: this.serverName,
@@ -914,7 +914,7 @@ export class SignalKMCPServer {
    *   process.exit(0);
    * });
    */
-  async cleanup(): Promise<void> {
+  cleanup(): void {
     if (this.signalkClient.connected) {
       this.signalkClient.disconnect();
     }

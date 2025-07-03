@@ -108,19 +108,20 @@ describe('SignalK Client listAvailablePaths - Live Integration', () => {
         expect(path).toMatch(/^[a-zA-Z]/); // Must start with letter
 
         // Common SignalK path prefixes
-        const commonPrefixes = [
-          'navigation.',
-          'environment.',
-          'propulsion.',
-          'electrical.',
-          'tanks.',
-          'steering.',
-          'sails.',
-          'design.',
-          'sensors.',
-          'communication.',
-          'notifications.',
-        ];
+        // Currently not used but kept for future validation
+        // const commonPrefixes = [
+        //   'navigation.',
+        //   'environment.',
+        //   'propulsion.',
+        //   'electrical.',
+        //   'tanks.',
+        //   'steering.',
+        //   'sails.',
+        //   'design.',
+        //   'sensors.',
+        //   'communication.',
+        //   'notifications.',
+        // ];
 
         // At least some paths should match common SignalK patterns
         // (but don't require all paths to match since servers vary)
@@ -131,7 +132,7 @@ describe('SignalK Client listAvailablePaths - Live Integration', () => {
       expect(availablePaths.paths).toEqual(sortedPaths);
 
       // Should contain some typical marine data paths if server has data
-      const pathSet = new Set(availablePaths.paths);
+      // const pathSet = new Set(availablePaths.paths);
 
       // Log some example paths for debugging
       console.log('Sample paths:', availablePaths.paths.slice(0, 10));

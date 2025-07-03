@@ -294,8 +294,8 @@ dist/                           # Compiled JavaScript output
 - Node.js 18+ required for native fetch support
 
 ### Iterative Development
+- Every file must not have eslint errors or typescript errors
 - Unit test coverage must be 80% or better on all implementation files
 - Additions or changes should have corresponding e2e tests that validate the tools
-- No eslint or typescript errors
 - Run the ci:full script to verify changes are ready and complete
 - Run the github action using act to verify changes are ready and complete

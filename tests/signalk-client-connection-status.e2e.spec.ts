@@ -63,7 +63,7 @@ describe('SignalK Client getConnectionStatus - Live Integration', () => {
     }
   });
 
-  test('should return valid connection status structure when connected', async () => {
+  test('should return valid connection status structure when connected', () => {
     // Get connection status
     const status = client.getConnectionStatus();
 
@@ -268,7 +268,7 @@ describe('SignalK Client getConnectionStatus - Live Integration', () => {
         });
       });
 
-      client.connect();
+      void client.connect();
       await reconnectPromise;
       await testUtils.waitFor(1000); // Brief additional wait for stability
 
