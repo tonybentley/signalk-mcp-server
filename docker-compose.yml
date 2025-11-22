@@ -1,0 +1,13 @@
+services:
+  signalk:
+    image: signalk/signalk-server:latest
+    platform: linux/amd64
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/signalk"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      - ADMINUSER=admin:adminadmin
