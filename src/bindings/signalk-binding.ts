@@ -31,7 +31,7 @@ import type {
  * // Agent code in isolate
  * const result = await sandbox.execute(`
  *   const vessel = await signalk.getVesselState();
- *   const targets = await signalk.getAISTargets({ maxDistance: 5000 });
+ *   const targets = await signalk.getAisTargets({ maxDistance: 5000 });
  *
  *   // Filter in isolate - huge token savings!
  *   const closeTargets = targets.targets.filter(t =>
@@ -83,13 +83,13 @@ export class SignalKBinding {
    *
    * @example
    * // In agent code
-   * const response = await signalk.getAISTargets({ maxDistance: 5000 });
+   * const response = await signalk.getAisTargets({ maxDistance: 5000 });
    * const closeTargets = response.targets.filter(t =>
    *   t.distanceMeters && t.distanceMeters < 1852
    * );
    * console.log(`${closeTargets.length} vessels within 1nm`);
    */
-  async getAISTargets(options?: {
+  async getAisTargets(options?: {
     page?: number;
     pageSize?: number;
     maxDistance?: number;

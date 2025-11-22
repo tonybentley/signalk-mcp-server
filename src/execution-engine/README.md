@@ -74,14 +74,14 @@ const signalkBinding = {
   async getVesselState() {
     return await signalkClient.getVesselState();
   },
-  async getAISTargets(options) {
+  async getAisTargets(options) {
     return await signalkClient.getAISTargets(options);
   }
 };
 
 // Agent code in isolate:
 const vessel = await signalk.getVesselState();
-const targets = await signalk.getAISTargets({ maxDistance: 5000 });
+const targets = await signalk.getAisTargets({ maxDistance: 5000 });
 const closeTargets = targets.filter(t => t.distanceMeters < 1852);
 console.log(`Found ${closeTargets.length} close targets`);
 // Only filtered results returned to agent context
@@ -122,7 +122,7 @@ export class SignalKBinding {
     return await this.client.getVesselState();
   }
 
-  async getAISTargets(options?: any) {
+  async getAisTargets(options?: any) {
     return await this.client.getAISTargets(options?.page, options?.pageSize);
   }
 
@@ -138,7 +138,7 @@ const binding = new SignalKBinding(signalkClient);
 
 const result = await sandbox.execute(`
   const vessel = await signalk.getVesselState();
-  const targets = await signalk.getAISTargets({ maxDistance: 5000 });
+  const targets = await signalk.getAisTargets({ maxDistance: 5000 });
   // Filter in isolate - huge token savings!
   const closeTargets = targets.filter(t => t.distanceMeters < 1852);
   console.log('Close targets:', closeTargets.length);

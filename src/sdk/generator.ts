@@ -49,7 +49,7 @@ export function generateSDK(tools: MCPTool[]): string {
  *
  * Usage in agent code:
  * const vessel = await getVesselState();
- * const targets = await getAISTargets({ page: 1, pageSize: 10 });
+ * const targets = await getAisTargets({ page: 1, pageSize: 10 });
  */
 
 ${functions.join('\n\n')}

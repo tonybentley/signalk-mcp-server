@@ -26,7 +26,7 @@ return { name, lat: position.latitude, lon: position.longitude };
 
 **Test 2: Filter AIS Targets** ✅
 ```javascript
-const response = await signalk.getAISTargets();
+const response = await signalk.getAisTargets();
 // Filter in isolate (NOT in agent context!)
 const closeTargets = response.targets.filter(t =>
   t.distanceMeters && t.distanceMeters < 5000
@@ -81,7 +81,7 @@ return { total: response.count, close: closeTargets.length };
 await signalk.getVesselState()
 
 // AIS targets sorted by distance
-await signalk.getAISTargets()
+await signalk.getAisTargets()
 
 // Active alarms and notifications
 await signalk.getActiveAlarms()
@@ -108,7 +108,7 @@ const result = await sandbox.execute(`
     const vessel = await signalk.getVesselState();
 
     // Get AIS targets
-    const targets = await signalk.getAISTargets();
+    const targets = await signalk.getAisTargets();
 
     // Get alarms
     const alarms = await signalk.getActiveAlarms();
@@ -195,12 +195,12 @@ export async function getVesselState() {
   return response;
 }
 
-export async function getAISTargets(options?: {
+export async function getAisTargets(options?: {
   page?: number;
   pageSize?: number;
   maxDistance?: number;
 }) {
-  const response = await __BINDING__.getAISTargets(options);
+  const response = await __BINDING__.getAisTargets(options);
   return response;
 }
 ```
