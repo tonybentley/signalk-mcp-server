@@ -194,6 +194,49 @@ describe('IsolateSandbox', () => {
       expect(result.success).toBe(true);
       expect(result.result).toBe(30);
     });
+
+    it('should pass object parameters to binding methods', async () => {
+      const dataBinding = {
+        getData: (options: { page?: number; pageSize?: number }) => {
+          return {
+            page: options?.page || 1,
+            pageSize: options?.pageSize || 10,
+            items: ['a', 'b', 'c'],
+          };
+        },
+      };
+
+      const result = await sandbox.execute(
+        '(async () => { const data = await api.getData({ page: 2, pageSize: 5 }); return JSON.stringify(data); })()',
+        { api: dataBinding }
+      );
+
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.result);
+      expect(parsed.page).toBe(2);
+      expect(parsed.pageSize).toBe(5);
+    });
+
+    it('should pass nested object parameters to binding methods', async () => {
+      const dataBinding = {
+        filter: (options: { filters: { minValue: number; maxValue: number } }) => {
+          return {
+            min: options.filters.minValue,
+            max: options.filters.maxValue,
+          };
+        },
+      };
+
+      const result = await sandbox.execute(
+        '(async () => { const data = await api.filter({ filters: { minValue: 10, maxValue: 100 } }); return JSON.stringify(data); })()',
+        { api: dataBinding }
+      );
+
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.result);
+      expect(parsed.min).toBe(10);
+      expect(parsed.max).toBe(100);
+    });
   });
 
   describe('Execution Time Tracking', () => {

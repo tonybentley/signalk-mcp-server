@@ -26,6 +26,7 @@
     "test:watch:unit": "jest --watch --testPathPatterns=\\.spec\\.ts$ --testPathIgnorePatterns=\\.e2e\\.",
     "test:watch:e2e": "jest --watch --testPathPatterns=\\.e2e\\.spec\\.ts$",
     "test:coverage": "jest --coverage --testPathPatterns=\\.spec\\.ts$ --testPathIgnorePatterns=\\.e2e\\.",
+    "test:isolate": "node tests/isolate-binding.test.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint 'src/**/*.ts' 'tests/**/*.ts'",
     "lint:fix": "eslint 'src/**/*.ts' 'tests/**/*.ts' --fix",

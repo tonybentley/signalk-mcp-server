@@ -73,16 +73,17 @@ EXECUTION_MODE=tools
 ### Primary Tool: execute_code (Code Execution Mode)
 Execute JavaScript code in a secure V8 isolate with access to SignalK SDK functions.
 
-**SDK Functions Available:**
-- `getVesselState()` - Get vessel navigation data, position, identity
-- `getAisTargets(options?)` - Get nearby AIS vessels (options: page, pageSize, maxDistance)
-- `getActiveAlarms()` - Get system notifications and alerts
-- `listAvailablePaths()` - Discover available SignalK data paths
-- `getPathValue(path)` - Get value for specific path (accepts string or {path: string})
-- `getConnectionStatus()` - Get connection status (sync method)
+**SDK Functions Available (all async - must use `await`):**
+- `await getVesselState()` - Get vessel navigation data, position, identity
+- `await getAisTargets(options?)` - Get nearby AIS vessels (options: page, pageSize, maxDistance)
+- `await getActiveAlarms()` - Get system notifications and alerts
+- `await listAvailablePaths()` - Discover available SignalK data paths
+- `await getPathValue(path)` - Get value for specific path (accepts string or {path: string})
+- `await getConnectionStatus()` - Get connection status
 
 **Code Requirements:**
 - Wrap code in async IIFE: `(async () => { ... })()`
+- **All SDK functions are async and must be awaited**
 - Return `JSON.stringify()` of result object
 - Console.log output captured in `logs` array
 

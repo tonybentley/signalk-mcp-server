@@ -201,7 +201,10 @@ export class IsolateSandbox {
     const methodProxies = methods.map(methodName => {
       const refName = `_${name}_${methodName}`;
       return `        ${methodName}: async function(...args) {
-          const externalCopy = await ${refName}.apply(undefined, args, { result: { promise: true } });
+          const externalCopy = await ${refName}.apply(undefined, args, {
+            arguments: { copy: true },
+            result: { promise: true }
+          });
           return externalCopy.copy();
         }`;
     }).join(',\n');
