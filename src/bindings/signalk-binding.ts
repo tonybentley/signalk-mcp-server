@@ -62,7 +62,7 @@ export class SignalKBinding {
    * console.log('Speed:', vessel.data['navigation.speedOverGround']?.value);
    */
   async getVesselState(): Promise<VesselState> {
-    return await this.client.getVesselState();
+    return this.client.getVesselState();
   }
 
   /**
@@ -136,7 +136,7 @@ export class SignalKBinding {
    * console.log(`${critical.length} critical alarms`);
    */
   async getActiveAlarms(): Promise<ActiveAlarmsResponse> {
-    return await this.client.getActiveAlarms();
+    return this.client.getActiveAlarms();
   }
 
   /**
@@ -154,7 +154,7 @@ export class SignalKBinding {
    * console.log('Navigation paths:', navPaths);
    */
   async listAvailablePaths(): Promise<AvailablePathsResponse> {
-    return await this.client.listAvailablePaths();
+    return this.client.listAvailablePaths();
   }
 
   /**
@@ -170,7 +170,7 @@ export class SignalKBinding {
    * console.log('Lon:', position.data.value.longitude);
    */
   async getPathValue(path: string): Promise<PathValueResponse> {
-    return await this.client.getPathValue(path);
+    return this.client.getPathValue(path);
   }
 
   /**

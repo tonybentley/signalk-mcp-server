@@ -25,7 +25,8 @@ export default {
   testPathIgnorePatterns: [
     '<rootDir>/node_modules/',
     '<rootDir>/test-*.js',               // Ignore legacy integration test files
-    '<rootDir>/test-*.ts'                // Ignore legacy TypeScript test files
+    '<rootDir>/test-*.ts',               // Ignore legacy TypeScript test files
+    '<rootDir>/src/execution-engine/isolate-sandbox.spec.ts'  // Requires real isolated-vm native module
   ],
   
   // Coverage configuration

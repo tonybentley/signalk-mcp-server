@@ -134,7 +134,7 @@ function generateJSDoc(tool: MCPTool): string {
   if (tool.inputSchema.properties) {
     lines.push(' *');
     for (const [key, prop] of Object.entries(tool.inputSchema.properties)) {
-      const propAny = prop as any;
+      const propAny = prop;
       if (propAny.description) {
         const optional = !tool.inputSchema.required?.includes(key);
         lines.push(` * @param ${optional ? '[' : ''}options.${key}${optional ? ']' : ''} - ${propAny.description}`);

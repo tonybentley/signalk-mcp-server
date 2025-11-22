@@ -13,6 +13,9 @@ import type { MCPToolResponse, MCPResource } from './types/index.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { getCurrentDirname } from './utils/path-utils.js';
+import { IsolateSandbox } from './execution-engine/isolate-sandbox.js';
+import { SignalKBinding } from './bindings/signalk-binding.js';
+import { prepareSDKForIsolate } from './sdk/generator.js';
 
 // Get __dirname equivalent for ES modules
 const currentDirname = getCurrentDirname();
@@ -21,6 +24,13 @@ export interface SignalKMCPServerOptions {
   serverName?: string;
   serverVersion?: string;
   signalkClient?: SignalKClient;
+  /**
+   * Execution mode for MCP server
+   * - 'tools': Legacy tools-based approach (backward compatible, deprecated)
+   * - 'code': Code execution mode with V8 isolates (default)
+   * - 'hybrid': Both tools and code execution available (for migration only)
+   */
+  executionMode?: 'tools' | 'code' | 'hybrid';
 }
 
 /**
@@ -58,6 +68,10 @@ export class SignalKMCPServer {
   private serverVersion: string;
   private resources: Map<string, any> = new Map();
   private resourcesDir: string;
+  private executionMode: 'tools' | 'code' | 'hybrid';
+  private sandbox?: IsolateSandbox;
+  private binding?: SignalKBinding;
+  private sdkCode?: string;
 
   /**
    * Creates a new SignalK MCP Server instance with configuration from options or environment variables
@@ -98,6 +112,10 @@ export class SignalKMCPServer {
       options.serverName || process.env.SERVER_NAME || 'signalk-mcp-server';
     this.serverVersion =
       options.serverVersion || process.env.SERVER_VERSION || '1.0.0';
+    this.executionMode =
+      options.executionMode ||
+      (process.env.EXECUTION_MODE as 'tools' | 'code' | 'hybrid') ||
+      'code';
 
     this.signalkClient = options.signalkClient || new SignalKClient();
     this.server = new Server(
@@ -112,6 +130,20 @@ export class SignalKMCPServer {
         },
       },
     );
+
+    // Initialize code execution components if needed
+    if (this.executionMode === 'code' || this.executionMode === 'hybrid') {
+      this.sandbox = new IsolateSandbox();
+      this.binding = new SignalKBinding(this.signalkClient);
+
+      // Generate SDK code from tools
+      const { wrapperCode } = prepareSDKForIsolate(this.getToolDefinitions());
+      this.sdkCode = wrapperCode;
+
+      console.error(
+        `[${this.executionMode.toUpperCase()} MODE] Code execution enabled`,
+      );
+    }
 
     // Setup resources directory
     // Use currentDirname to find the resources directory relative to this file
@@ -205,15 +237,183 @@ export class SignalKMCPServer {
   }
 
   /**
+   * Extract MCP tool definitions in the format expected by SDK generator
+   *
+   * @returns Array of MCPTool definitions
+   */
+  /**
+   * Returns tool definitions for SDK generation
+   *
+   * NOTE: Most legacy tools removed in favor of execute_code.
+   * Only essential utility tools remain for debugging and documentation.
+   */
+  private getToolDefinitions(): Array<{
+    name: string;
+    description: string;
+    inputSchema: any;
+  }> {
+    return [
+      {
+        name: 'get_vessel_state',
+        description:
+          '⚠️ DEPRECATED: Use execute_code instead for better performance.\n\n' +
+          'Get current vessel navigation data (position, heading, speed, wind, vessel identity)\n\n' +
+          'Migration example:\n' +
+          '```javascript\n' +
+          '(async () => {\n' +
+          '  const vessel = await getVesselState();\n' +
+          '  return JSON.stringify({\n' +
+          '    name: vessel.data.name?.value,\n' +
+          '    position: vessel.data["navigation.position"]?.value\n' +
+          '  });\n' +
+          '})();\n' +
+          '```\n\n' +
+          'Benefits: 94% fewer tokens, client-side filtering.',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          additionalProperties: false,
+        },
+      },
+      {
+        name: 'get_ais_targets',
+        description:
+          '⚠️ DEPRECATED: Use execute_code instead for better performance.\n\n' +
+          'Get nearby AIS targets sorted by distance from self vessel (closest first). Includes distance in meters, position, course, and speed data.\n\n' +
+          'Migration example:\n' +
+          '```javascript\n' +
+          '(async () => {\n' +
+          '  const ais = await getAisTargets({ pageSize: 50 });\n' +
+          '  const nearby = ais.targets.filter(t => t.distanceMeters < 1852);\n' +
+          '  return JSON.stringify({ count: nearby.length, vessels: nearby.slice(0, 5) });\n' +
+          '})();\n' +
+          '```\n\n' +
+          'Benefits: 95% fewer tokens, filter by distance in isolate.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            page: {
+              type: 'number',
+              description: 'Page number (1-based, default: 1)',
+              minimum: 1,
+            },
+            pageSize: {
+              type: 'number',
+              description: 'Number of targets per page (default: 10, max: 50)',
+              minimum: 1,
+              maximum: 50,
+            },
+          },
+          additionalProperties: false,
+        },
+      },
+      {
+        name: 'get_active_alarms',
+        description:
+          '⚠️ DEPRECATED: Use execute_code instead for better performance.\n\n' +
+          'Get current system notifications and alerts\n\n' +
+          'Migration example:\n' +
+          '```javascript\n' +
+          '(async () => {\n' +
+          '  const alarms = await getActiveAlarms();\n' +
+          '  const critical = alarms.alarms.filter(a => a.state === "alarm" || a.state === "emergency");\n' +
+          '  return JSON.stringify({ hasCritical: critical.length > 0, count: critical.length });\n' +
+          '})();\n' +
+          '```\n\n' +
+          'Benefits: 90% fewer tokens, filter critical alarms in isolate.',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          additionalProperties: false,
+        },
+      },
+      {
+        name: 'list_available_paths',
+        description:
+          '⚠️ DEPRECATED: Use execute_code instead for better performance.\n\n' +
+          'Discover available SignalK data paths\n\n' +
+          'Migration example:\n' +
+          '```javascript\n' +
+          '(async () => {\n' +
+          '  const result = await listAvailablePaths();\n' +
+          '  const navPaths = result.paths.filter(p => p.startsWith("navigation."));\n' +
+          '  return JSON.stringify({ navigation: navPaths });\n' +
+          '})();\n' +
+          '```\n\n' +
+          'Benefits: 92% fewer tokens, filter by path prefix in isolate.',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          additionalProperties: false,
+        },
+      },
+      {
+        name: 'get_path_value',
+        description:
+          '⚠️ DEPRECATED: Use execute_code instead for better performance.\n\n' +
+          'Get latest value for a specific SignalK path\n\n' +
+          'Migration example:\n' +
+          '```javascript\n' +
+          '(async () => {\n' +
+          '  const speed = await getPathValue({ path: "navigation.speedOverGround" });\n' +
+          '  const heading = await getPathValue({ path: "navigation.headingTrue" });\n' +
+          '  return JSON.stringify({ speed: speed.data?.value, heading: heading.data?.value });\n' +
+          '})();\n' +
+          '```\n\n' +
+          'Benefits: 96% fewer tokens, query multiple paths in one execution.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            path: {
+              type: 'string',
+              description: 'SignalK data path (e.g., navigation.position)',
+            },
+          },
+          required: ['path'],
+          additionalProperties: false,
+        },
+      },
+      {
+        name: 'get_connection_status',
+        description: 'Get SignalK connection status and health. Useful for debugging and troubleshooting connectivity issues.',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          additionalProperties: false,
+        },
+      },
+      {
+        name: 'get_initial_context',
+        description:
+          'Get comprehensive SignalK context and documentation to understand available data and usage patterns. Call this once at the start of a session to learn about SignalK capabilities.',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          additionalProperties: false,
+        },
+      },
+    ];
+  }
+
+  /**
    * Registers MCP tool handlers and defines the available tools for AI agents
    *
-   * Registered tools:
+   * Execution modes:
+   * - 'tools': Only legacy tools (backward compatible)
+   * - 'code': Only execute_code tool (new approach)
+   * - 'hybrid': Both legacy tools and execute_code (default)
+   *
+   * Legacy tools:
    * - get_vessel_state: Current vessel navigation data
    * - get_ais_targets: Nearby vessels from AIS
    * - get_active_alarms: System notifications and alerts
    * - list_available_paths: Discover available SignalK data paths
    * - get_path_value: Get latest value for specific path
    * - get_connection_status: WebSocket connection health
+   * - get_initial_context: Comprehensive SignalK documentation
+   *
+   * Code execution tool:
+   * - execute_code: Execute JavaScript code in V8 isolate with SignalK SDK
    *
    * Handler features:
    * - JSON Schema validation for tool inputs
@@ -230,95 +430,44 @@ export class SignalKMCPServer {
    * // - get_vessel_state()
    * // - get_ais_targets()
    * // - get_path_value({"path": "navigation.position"})
+   * // - execute_code({"code": "const vessel = await getVesselState(); ..."})
    */
   setupToolHandlers(): void {
-    this.server.setRequestHandler(ListToolsRequestSchema, () => ({
-      tools: [
-        {
-          name: 'get_vessel_state',
+    this.server.setRequestHandler(ListToolsRequestSchema, () => {
+      const tools: any[] = [];
+
+      // Add legacy tools if in 'tools' or 'hybrid' mode
+      if (this.executionMode === 'tools' || this.executionMode === 'hybrid') {
+        tools.push(...this.getToolDefinitions());
+      }
+
+      // Add execute_code tool if in 'code' or 'hybrid' mode
+      if (this.executionMode === 'code' || this.executionMode === 'hybrid') {
+        tools.push({
+          name: 'execute_code',
           description:
-            'Get current vessel navigation data (position, heading, speed, wind, vessel identity)',
-          inputSchema: {
-            type: 'object',
-            properties: {},
-            additionalProperties: false,
-          },
-        },
-        {
-          name: 'get_ais_targets',
-          description: 'Get nearby AIS targets sorted by distance from self vessel (closest first). Includes distance in meters, position, course, and speed data.',
+            'Execute JavaScript code in a secure V8 isolate with access to SignalK SDK functions. ' +
+            'Code can use async/await and has access to: getVesselState(), getAisTargets(options), ' +
+            'getActiveAlarms(), listAvailablePaths(), getPathValue(path), getConnectionStatus(). ' +
+            'MUST return JSON.stringify() of result object. Example: ' +
+            '(async () => { const vessel = await getVesselState(); return JSON.stringify({ name: vessel.data.name?.value }); })()',
           inputSchema: {
             type: 'object',
             properties: {
-              page: {
-                type: 'number',
-                description: 'Page number (1-based, default: 1)',
-                minimum: 1,
-              },
-              pageSize: {
-                type: 'number',
-                description: 'Number of targets per page (default: 10, max: 50)',
-                minimum: 1,
-                maximum: 50,
-              },
-            },
-            additionalProperties: false,
-          },
-        },
-        {
-          name: 'get_active_alarms',
-          description: 'Get current system notifications and alerts',
-          inputSchema: {
-            type: 'object',
-            properties: {},
-            additionalProperties: false,
-          },
-        },
-        {
-          name: 'list_available_paths',
-          description: 'Discover available SignalK data paths',
-          inputSchema: {
-            type: 'object',
-            properties: {},
-            additionalProperties: false,
-          },
-        },
-        {
-          name: 'get_path_value',
-          description: 'Get latest value for a specific SignalK path',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              path: {
+              code: {
                 type: 'string',
-                description: 'SignalK data path (e.g., navigation.position)',
+                description:
+                  'JavaScript code to execute. Must be wrapped in async IIFE and return JSON.stringify() of result.',
               },
             },
-            required: ['path'],
+            required: ['code'],
             additionalProperties: false,
           },
-        },
-        {
-          name: 'get_connection_status',
-          description: 'Get SignalK WebSocket connection status and health',
-          inputSchema: {
-            type: 'object',
-            properties: {},
-            additionalProperties: false,
-          },
-        },
-        {
-          name: 'get_initial_context',
-          description:
-            'Get comprehensive SignalK context and documentation to understand available data and usage patterns',
-          inputSchema: {
-            type: 'object',
-            properties: {},
-            additionalProperties: false,
-          },
-        },
-      ],
-    }));
+        });
+      }
+
+      return { tools };
+    });
 
     this.server.setRequestHandler(
       CallToolRequestSchema,
@@ -326,25 +475,54 @@ export class SignalKMCPServer {
         const { name, arguments: args } = request.params;
 
         try {
+          // Handle execute_code tool
+          if (name === 'execute_code') {
+            if (this.executionMode === 'tools') {
+              throw new McpError(
+                ErrorCode.MethodNotFound,
+                'execute_code tool is not available in tools-only mode',
+              );
+            }
+            return await this.executeCode(args.code);
+          }
+
+          // Handle legacy tools (only in tools/hybrid mode)
+          if (this.executionMode === 'tools' || this.executionMode === 'hybrid') {
+            switch (name) {
+              case 'get_vessel_state':
+                return await this.getVesselState();
+              case 'get_ais_targets':
+                return await this.getAISTargets(args?.page, args?.pageSize);
+              case 'get_active_alarms':
+                return await this.getActiveAlarms();
+              case 'list_available_paths':
+                return await this.listAvailablePaths();
+              case 'get_path_value':
+                return await this.getPathValue(args?.path);
+              case 'get_connection_status':
+                return this.getConnectionStatus();
+              case 'get_initial_context':
+                return this.getInitialContext();
+              default:
+                throw new McpError(
+                  ErrorCode.MethodNotFound,
+                  `Unknown tool: ${name}`,
+                );
+            }
+          }
+
+          // In code-only mode, only utility tools are available
           switch (name) {
-            case 'get_vessel_state':
-              return await this.getVesselState();
-            case 'get_ais_targets':
-              return await this.getAISTargets(args.page, args.pageSize);
-            case 'get_active_alarms':
-              return await this.getActiveAlarms();
-            case 'list_available_paths':
-              return await this.listAvailablePaths();
-            case 'get_path_value':
-              return await this.getPathValue(args.path);
             case 'get_connection_status':
               return this.getConnectionStatus();
             case 'get_initial_context':
               return this.getInitialContext();
             default:
+              // Data-fetching tools not available in code mode
               throw new McpError(
                 ErrorCode.MethodNotFound,
-                `Unknown tool: ${name}`,
+                `Tool ${name} is not available in code-only mode. Use execute_code tool with SignalK SDK functions instead. ` +
+                `Available SDK functions: getVesselState(), getAisTargets(), getActiveAlarms(), listAvailablePaths(), getPathValue()`,
               );
           }
         } catch (error: any) {
@@ -437,6 +615,82 @@ export class SignalKMCPServer {
   }
 
   /**
+   * MCP tool handler that executes JavaScript code in a V8 isolate with SignalK SDK
+   *
+   * Execution environment:
+   * - Secure V8 isolate (128MB memory limit, 30s timeout)
+   * - SignalK SDK functions auto-injected
+   * - No access to Node.js globals or filesystem
+   * - Console.log captured and returned
+   *
+   * Available SDK functions:
+   * - getVesselState()
+   * - getAisTargets(options?)
+   * - getActiveAlarms()
+   * - listAvailablePaths()
+   * - getPathValue(path)
+   * - getConnectionStatus()
+   * - getInitialContext()
+   *
+   * Code requirements:
+   * - Must be wrapped in async IIFE: (async () => { ... })()
+   * - Must return JSON.stringify() of result object
+   *
+   * @param code - JavaScript code to execute
+   * @returns MCPToolResponse with execution result and logs
+   *
+   * @example
+   * // Called by AI agents via MCP protocol:
+   * // Tool: execute_code
+   * // Arguments: {
+   * //   "code": "(async () => { const vessel = await getVesselState(); return JSON.stringify({ name: vessel.data.name?.value }); })()"
+   * // }
+   *
+   * // Response content:
+   * // {
+   * //   "success": true,
+   * //   "result": "{\"name\":\"My Boat\"}",
+   * //   "logs": ["Calling getVesselState..."],
+   * //   "executionTime": 45
+   * // }
+   */
+  async executeCode(code: string): Promise<MCPToolResponse> {
+    if (!this.sandbox || !this.binding || !this.sdkCode) {
+      throw new McpError(
+        ErrorCode.InternalError,
+        'Code execution not available - execution mode not configured properly',
+      );
+    }
+
+    try {
+      // Inject SDK and execute code
+      const wrappedCode = `
+        ${this.sdkCode}
+
+        ${code}
+      `;
+
+      const result = await this.sandbox.execute(wrappedCode, {
+        signalk: this.binding,
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    } catch (error: any) {
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Code execution failed: ${error.message}`,
+      );
+    }
+  }
+
+  /**
    * MCP tool handler that returns current vessel state with all available sensor data
    *
    * Response format:
@@ -446,36 +700,21 @@ export class SignalKMCPServer {
    * - Formatted with 2-space indentation for readability
    *
    * @returns MCPToolResponse with vessel state as formatted JSON text
-   *
-   * @example
-   * // Called by AI agents via MCP protocol:
-   * // Tool: get_vessel_state
-   * // Arguments: {}
-   *
-   * // Response content:
-   * // {
-   * //   "connected": true,
-   * //   "context": "vessels.self",
-   * //   "timestamp": "2023-06-22T10:30:15.123Z",
-   * //   "data": {
-   * //     "navigation.position": {
-   * //       "value": {"latitude": 37.8199, "longitude": -122.4783},
-   * //       "timestamp": "2023-06-22T10:30:15.000Z"
-   * //     },
-   * //     "navigation.speedOverGround": {
-   * //       "value": 5.2,
-   * //       "timestamp": "2023-06-22T10:30:15.000Z"
-   * //     }
-   * //   }
-   * // }
    */
   async getVesselState(): Promise<MCPToolResponse> {
     const data = await this.signalkClient.getVesselState();
+
+    // Add deprecation warning if in hybrid mode
+    const deprecationNotice = this.executionMode === 'hybrid'
+      ? '\n⚠️ DEPRECATION WARNING: This tool will be removed in a future version. ' +
+        'Use execute_code with getVesselState() for 94% token savings.\n'
+      : '';
+
     return {
       content: [
         {
           type: 'text',
-          text: JSON.stringify(data, null, 2),
+          text: deprecationNotice + JSON.stringify(data, null, 2),
         },
       ],
     };
@@ -484,55 +723,24 @@ export class SignalKMCPServer {
   /**
    * MCP tool handler that returns nearby AIS targets (other vessels) with position and navigation data
    *
-   * Response format:
-   * - JSON text content with AIS target array sorted by distance
-   * - Includes distance in meters from self vessel when positions available
-   * - Supports pagination with configurable page size
-   * - Filtered to targets updated within last 5 minutes
-   * - Maximum 50 targets per page
-   * - Includes MMSI, position, course, speed, and vessel identification
-   *
    * @param page - Page number (1-based, default: 1)
    * @param pageSize - Number of targets per page (default: 10, max: 50)
    * @returns MCPToolResponse with AIS targets as formatted JSON text
-   *
-   * @example
-   * // Called by AI agents via MCP protocol:
-   * // Tool: get_ais_targets
-   * // Arguments: {"page": 1, "pageSize": 10}
-   *
-   * // Response content:
-   * // {
-   * //   "connected": true,
-   * //   "count": 2,
-   * //   "timestamp": "2023-06-22T10:30:15.123Z",
-   * //   "targets": [
-   * //     {
-   * //       "mmsi": "123456789",
-   * //       "distanceMeters": 1852.5,
-   * //       "navigation.position": {"latitude": 37.8200, "longitude": -122.4800},
-   * //       "navigation.courseOverGround": 45.0,
-   * //       "navigation.speedOverGround": 8.5,
-   * //       "lastUpdate": "2023-06-22T10:29:45.000Z"
-   * //     }
-   * //   ],
-   * //   "pagination": {
-   * //     "page": 1,
-   * //     "pageSize": 10,
-   * //     "totalCount": 15,
-   * //     "totalPages": 2,
-   * //     "hasNextPage": true,
-   * //     "hasPreviousPage": false
-   * //   }
-   * // }
    */
   async getAISTargets(page?: number, pageSize?: number): Promise<MCPToolResponse> {
     const data = await this.signalkClient.getAISTargets(page, pageSize);
+
+    // Add deprecation warning if in hybrid mode
+    const deprecationNotice = this.executionMode === 'hybrid'
+      ? '\n⚠️ DEPRECATION WARNING: This tool will be removed in a future version. ' +
+        'Use execute_code with getAisTargets() for 95% token savings.\n'
+      : '';
+
     return {
       content: [
         {
           type: 'text',
-          text: JSON.stringify(data, null, 2),
+          text: deprecationNotice + JSON.stringify(data, null, 2),
         },
       ],
     };
@@ -541,47 +749,22 @@ export class SignalKMCPServer {
   /**
    * MCP tool handler that returns current active alarms and system notifications
    *
-   * Response format:
-   * - JSON text content with active alarm array
-   * - Includes alarm state (alert, warn, alarm, emergency)
-   * - Contains alarm message, path, and timestamp
-   * - Only returns alarms with non-normal states
-   *
-   * Alarm states:
-   * - alert: General warning condition
-   * - warn: Warning requiring attention
-   * - alarm: Alarm requiring immediate attention
-   * - emergency: Emergency requiring immediate action
-   *
    * @returns MCPToolResponse with active alarms as formatted JSON text
-   *
-   * @example
-   * // Called by AI agents via MCP protocol:
-   * // Tool: get_active_alarms
-   * // Arguments: {}
-   *
-   * // Response content:
-   * // {
-   * //   "connected": true,
-   * //   "count": 1,
-   * //   "timestamp": "2023-06-22T10:30:15.123Z",
-   * //   "alarms": [
-   * //     {
-   * //       "path": "notifications.engines.temperature",
-   * //       "state": "alert",
-   * //       "message": "Engine temperature high",
-   * //       "timestamp": "2023-06-22T10:25:30.000Z"
-   * //     }
-   * //   ]
-   * // }
    */
   async getActiveAlarms(): Promise<MCPToolResponse> {
     const data = await this.signalkClient.getActiveAlarms();
+
+    // Add deprecation warning if in hybrid mode
+    const deprecationNotice = this.executionMode === 'hybrid'
+      ? '\n⚠️ DEPRECATION WARNING: This tool will be removed in a future version. ' +
+        'Use execute_code with getActiveAlarms() for 90% token savings.\n'
+      : '';
+
     return {
       content: [
         {
           type: 'text',
-          text: JSON.stringify(data, null, 2),
+          text: deprecationNotice + JSON.stringify(data, null, 2),
         },
       ],
     };
@@ -590,45 +773,22 @@ export class SignalKMCPServer {
   /**
    * MCP tool handler that discovers and returns all available SignalK data paths
    *
-   * Response format:
-   * - JSON text content with sorted array of available paths
-   * - Uses HTTP REST API for complete path discovery
-   * - Falls back to WebSocket-discovered paths if HTTP fails
-   * - Filters out metadata fields and internal paths
-   *
-   * Path discovery methods:
-   * 1. Primary: HTTP REST API query to SignalK server
-   * 2. Fallback: WebSocket-cached paths from live data
-   *
    * @returns MCPToolResponse with available paths as formatted JSON text
-   *
-   * @example
-   * // Called by AI agents via MCP protocol:
-   * // Tool: list_available_paths
-   * // Arguments: {}
-   *
-   * // Response content:
-   * // {
-   * //   "connected": true,
-   * //   "count": 25,
-   * //   "timestamp": "2023-06-22T10:30:15.123Z",
-   * //   "paths": [
-   * //     "electrical.batteries.house.voltage",
-   * //     "environment.wind.speedApparent",
-   * //     "navigation.courseOverGround",
-   * //     "navigation.position",
-   * //     "navigation.speedOverGround",
-   * //     "propulsion.main.temperature"
-   * //   ]
-   * // }
    */
   async listAvailablePaths(): Promise<MCPToolResponse> {
     const data = await this.signalkClient.listAvailablePaths();
+
+    // Add deprecation warning if in hybrid mode
+    const deprecationNotice = this.executionMode === 'hybrid'
+      ? '\n⚠️ DEPRECATION WARNING: This tool will be removed in a future version. ' +
+        'Use execute_code with listAvailablePaths() for 92% token savings.\n'
+      : '';
+
     return {
       content: [
         {
           type: 'text',
-          text: JSON.stringify(data, null, 2),
+          text: deprecationNotice + JSON.stringify(data, null, 2),
         },
       ],
     };
@@ -637,49 +797,23 @@ export class SignalKMCPServer {
   /**
    * MCP tool handler that gets the latest value for a specific SignalK data path
    *
-   * Response format:
-   * - JSON text content with path value and metadata
-   * - Uses HTTP REST API for real-time data from server
-   * - Falls back to WebSocket-cached value if HTTP fails
-   * - Includes timestamps, source information, and error details
-   *
-   * Value retrieval methods:
-   * 1. Primary: HTTP REST API query for specific path
-   * 2. Fallback: WebSocket-cached value from live data
-   *
    * @param path - SignalK data path in dot notation (e.g., 'navigation.position')
    * @returns MCPToolResponse with path value as formatted JSON text
-   *
-   * @example
-   * // Called by AI agents via MCP protocol:
-   * // Tool: get_path_value
-   * // Arguments: {"path": "navigation.position"}
-   *
-   * // Response content:
-   * // {
-   * //   "connected": true,
-   * //   "path": "navigation.position",
-   * //   "timestamp": "2023-06-22T10:30:15.123Z",
-   * //   "data": {
-   * //     "value": {
-   * //       "latitude": 37.8199,
-   * //       "longitude": -122.4783
-   * //     },
-   * //     "timestamp": "2023-06-22T10:30:15.000Z",
-   * //     "source": {
-   * //       "label": "GPS1",
-   * //       "type": "NMEA0183"
-   * //     }
-   * //   }
-   * // }
    */
   async getPathValue(path: string): Promise<MCPToolResponse> {
     const data = await this.signalkClient.getPathValue(path);
+
+    // Add deprecation warning if in hybrid mode
+    const deprecationNotice = this.executionMode === 'hybrid'
+      ? '\n⚠️ DEPRECATION WARNING: This tool will be removed in a future version. ' +
+        'Use execute_code with getPathValue() for 96% token savings.\n'
+      : '';
+
     return {
       content: [
         {
           type: 'text',
-          text: JSON.stringify(data, null, 2),
+          text: deprecationNotice + JSON.stringify(data, null, 2),
         },
       ],
     };
