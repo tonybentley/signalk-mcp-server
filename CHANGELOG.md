@@ -5,13 +5,20 @@ All notable changes to the SignalK MCP Server project will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] - 2025-01-16
+## [2.0.0] - 2025-11-22
 
 ### 🚀 Major Release: Code Execution Engine
 
 This release represents a fundamental architectural shift from traditional MCP tools to a code execution model using V8 isolates. **Token usage reduced by 90-96%** for typical marine data queries.
 
 ### Added
+
+#### New Dependencies
+- **isolated-vm** (`^5.0.1`) - V8 isolate library for secure code execution
+
+#### Docker Support
+- **docker-compose.yml** for easy local development with SignalK server
+- Quick start with `docker-compose up` for testing
 
 #### Code Execution Engine (Phases 1-4)
 - **V8 Isolate Sandbox** (`src/execution-engine/isolate-sandbox.ts`)
@@ -108,17 +115,25 @@ The following tools are deprecated and have been removed in code mode:
 
 ### Documentation
 
-- Added `TOOL-MIGRATION-GUIDE.md` - Complete migration guide from legacy tools to code execution
-- Updated inline documentation for all execution modes
+- **README.md** - Complete rewrite focused on code execution benefits and quick start
+- **src/bindings/README.md** - SignalK binding layer documentation
+- **src/execution-engine/README.md** - V8 isolate sandbox documentation
+- **src/sdk/README.md** - Auto-generated SDK documentation
+- **.context/** - Internal migration planning docs (MIGRATION-PLAN.md, TOOL-MIGRATION-GUIDE.md)
 - Added JSDoc comments to all SDK-generated functions
-- Documented strangler pattern for gradual migration
 
 ### Testing
 
-- Added 18 migration comparison tests (`src/tool-migration.spec.ts`)
-- Validates deprecation warnings, token savings, backward compatibility
-- Tests all 3 execution modes (tools, code, hybrid)
-- 96 total unit tests passing
+- **src/tool-migration.spec.ts** - 18 migration comparison tests validating deprecation warnings, token savings, backward compatibility
+- **src/hybrid-mode.spec.ts** - Comprehensive hybrid mode tests for all 3 execution modes
+- **src/execution-engine/isolate-sandbox.spec.ts** - V8 isolate sandbox unit tests
+- **tests/__mocks__/isolated-vm.js** - Mock for isolated-vm library in test environment
+- Updated jest.config.js for new test structure
+
+### Build & Tooling
+
+- **eslint.config.mjs** - Migrated ESLint config from CommonJS to ES modules
+- **tsconfig.eslint.json** - Dedicated TypeScript config for ESLint
 
 ### Technical Details
 
@@ -183,7 +198,7 @@ Or in Claude Desktop config:
 
 ---
 
-## [1.0.0] - 2025-01-15
+## [1.0.0] - 2025-07-06
 
 ### Initial Release
 
@@ -215,5 +230,5 @@ Or in Claude Desktop config:
 
 ## Version History
 
-- **2.0.0** (2025-01-16): Code execution engine, 90-96% token savings
-- **1.0.0** (2025-01-15): Initial release with legacy MCP tools
+- **2.0.0** (2025-11-22): Code execution engine, Docker support, 90-96% token savings
+- **1.0.0** (2025-07-06): Initial release with legacy MCP tools
