@@ -160,16 +160,18 @@ export class SignalKBinding {
   /**
    * Get latest value for a specific SignalK path
    *
-   * @param path - SignalK path in dot notation (e.g., 'navigation.position')
+   * @param pathOrOptions - SignalK path as string or object with path property
    * @returns Promise<PathValueResponse> with value and metadata
    *
    * @example
-   * // In agent code
+   * // In agent code - both forms work:
    * const position = await signalk.getPathValue('navigation.position');
+   * const position2 = await signalk.getPathValue({ path: 'navigation.position' });
    * console.log('Lat:', position.data.value.latitude);
    * console.log('Lon:', position.data.value.longitude);
    */
-  async getPathValue(path: string): Promise<PathValueResponse> {
+  async getPathValue(pathOrOptions: string | { path: string }): Promise<PathValueResponse> {
+    const path = typeof pathOrOptions === 'string' ? pathOrOptions : pathOrOptions.path;
     return this.client.getPathValue(path);
   }
 
