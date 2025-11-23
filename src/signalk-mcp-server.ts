@@ -447,10 +447,11 @@ export class SignalKMCPServer {
           name: 'execute_code',
           description:
             'Execute JavaScript code in a secure V8 isolate with access to SignalK SDK functions. ' +
-            'Code can use async/await and has access to: getVesselState(), getAisTargets(options), ' +
-            'getActiveAlarms(), listAvailablePaths(), getPathValue(path), getConnectionStatus(). ' +
-            'MUST return JSON.stringify() of result object. Example: ' +
-            '(async () => { const vessel = await getVesselState(); return JSON.stringify({ name: vessel.data.name?.value }); })()',
+            'IMPORTANT: ALL SDK functions are async and MUST be awaited, including getConnectionStatus(). ' +
+            'Available functions: await getVesselState(), await getAisTargets(options), ' +
+            'await getActiveAlarms(), await listAvailablePaths(), await getPathValue(path), await getConnectionStatus(). ' +
+            'Code MUST: (1) be wrapped in async IIFE, (2) await all SDK calls, (3) return JSON.stringify() of result. ' +
+            'Example: (async () => { const vessel = await getVesselState(); return JSON.stringify({ name: vessel.data.name?.value }); })()',
           inputSchema: {
             type: 'object',
             properties: {

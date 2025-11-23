@@ -76,14 +76,14 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 
 ### Available SDK Functions
 
-When using `execute_code`, these functions are available:
+When using `execute_code`, these functions are available. **IMPORTANT: ALL functions are async and MUST be awaited:**
 
 ```javascript
 // Vessel data
 const vessel = await getVesselState();
 
-// AIS targets (with pagination)
-const ais = await getAisTargets({ page: 1, pageSize: 50 });
+// AIS targets (with pagination and optional distance filter)
+const ais = await getAisTargets({ page: 1, pageSize: 50, maxDistance: 5000 });
 
 // System alarms
 const alarms = await getActiveAlarms();
@@ -91,10 +91,11 @@ const alarms = await getActiveAlarms();
 // Discover available data paths
 const paths = await listAvailablePaths();
 
-// Get specific path value
-const speed = await getPathValue({ path: "navigation.speedOverGround" });
+// Get specific path value (both string and object syntax work)
+const speed = await getPathValue("navigation.speedOverGround");
+const heading = await getPathValue({ path: "navigation.headingTrue" });
 
-// Connection status (utility)
+// Connection status - ALSO requires await!
 const status = await getConnectionStatus();
 ```
 
@@ -280,14 +281,16 @@ execute_code tool
   ↓
 V8 Isolate Sandbox (isolated-vm)
   ↓
-SignalK SDK Functions
+SignalK SDK Functions (all async, must await)
   ↓
-SignalK Binding Layer
+SignalK Binding Layer (RPC-style)
   ↓
-SignalK Client (HTTP/WebSocket)
+SignalK Client (HTTP REST API)
   ↓
 SignalK Server
 ```
+
+> **Note:** HTTP-only mode ensures fresh data on every request. WebSocket code is preserved for future streaming support.
 
 ### Key Components
 
@@ -352,10 +355,10 @@ Returns: All vessel data (~2000 tokens)
 
 ### Connection Issues
 
-Check connection status:
+Check connection status (note: `await` is required):
 ```javascript
 (async () => {
-  const status = await getConnectionStatus();
+  const status = await getConnectionStatus();  // await is required!
   return JSON.stringify(status);
 })()
 ```

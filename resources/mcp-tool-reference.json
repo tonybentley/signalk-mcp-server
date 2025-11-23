@@ -1,87 +1,132 @@
 {
-  "description": "Available MCP tools for SignalK interaction",
-  "tools": {
-    "signalk:get_vessel_state": {
-      "purpose": "Get comprehensive vessel data snapshot",
-      "returns": "Current values for all available paths",
-      "response_format": "Object with path keys and value/timestamp objects",
-      "use_when": "Need complete vessel status overview",
-      "frequency": "Use sparingly - data intensive operation",
-      "efficiency_note": "Contains hundreds of data points - cache results"
-    },
-    "signalk:get_ais_targets": {
-      "purpose": "Get nearby vessel traffic information", 
-      "returns": "Array of AIS contacts with positions and vessel details",
-      "response_format": "Array of vessel objects with MMSI, position, course, speed",
-      "use_when": "Traffic analysis, collision avoidance, situational awareness",
-      "frequency": "Can call frequently - AIS updates every few seconds",
-      "efficiency_note": "Updates continuously - good for real-time awareness"
-    },
-    "signalk:get_active_alarms": {
-      "purpose": "Get current system alerts and notifications",
-      "returns": "Active alarms with severity levels and messages",
-      "response_format": "Array of alarm objects with path, state, message",
-      "use_when": "System health checks, troubleshooting issues",
-      "frequency": "Check when concerned about system status",
-      "efficiency_note": "Typically small dataset unless problems exist"
-    },
-    "signalk:list_available_paths": {
-      "purpose": "Discover what data is available on this vessel",
-      "returns": "List of all SignalK paths currently providing data",
-      "response_format": "Object with paths array and count",
-      "use_when": "System discovery, understanding vessel capabilities",
-      "frequency": "Rarely - vessel capabilities don't change often",
-      "efficiency_note": "Capabilities are relatively static"
-    },
-    "signalk:get_path_value": {
-      "purpose": "Get current value for a specific SignalK path",
-      "parameters": {
-        "path": "Specific SignalK path to query (e.g., 'navigation.position')"
+  "description": "MCP tool reference for SignalK server - Code Execution Mode",
+  "execution_mode": {
+    "default": "code",
+    "description": "The SignalK MCP server uses V8 isolate code execution by default. This provides 90-96% token savings compared to legacy tools."
+  },
+  "primary_tool": {
+    "name": "execute_code",
+    "description": "Execute JavaScript code in a secure V8 isolate with access to SignalK SDK functions",
+    "usage": {
+      "code_requirements": [
+        "Wrap code in async IIFE: (async () => { ... })()",
+        "ALL SDK functions are async and MUST be awaited",
+        "Return JSON.stringify() of result object",
+        "Console.log output is captured in 'logs' array"
+      ],
+      "example": "(async () => {\n  const vessel = await getVesselState();\n  return JSON.stringify({\n    name: vessel.data.name?.value,\n    position: vessel.data[\"navigation.position\"]?.value\n  });\n})()"
+    }
+  },
+  "sdk_functions": {
+    "note": "ALL functions are async and MUST be awaited, including getConnectionStatus()",
+    "functions": {
+      "getVesselState": {
+        "signature": "await getVesselState()",
+        "description": "Get comprehensive vessel data (position, heading, speed, identity, sensors)",
+        "returns": "Object with 'data' property containing all SignalK paths as keys",
+        "example": "const vessel = await getVesselState();\nconst name = vessel.data.name?.value;\nconst pos = vessel.data[\"navigation.position\"]?.value;"
       },
-      "returns": "Current value and timestamp for the specified path",
-      "response_format": "Single value with timestamp",
-      "use_when": "Need specific current value without full vessel state",
-      "frequency": "Good for targeted queries - much more efficient than full state",
-      "efficiency_note": "Highly efficient for single data points"
-    },
-    "signalk:get_connection_status": {
-      "purpose": "Check SignalK server connectivity and health",
-      "returns": "Connection status, server info, basic statistics",
-      "response_format": "Object with connection details and server metadata",
-      "use_when": "Troubleshooting connectivity issues, system diagnostics",
-      "frequency": "As needed for diagnostics",
-      "efficiency_note": "Lightweight operation"
+      "getAisTargets": {
+        "signature": "await getAisTargets(options?)",
+        "description": "Get nearby AIS targets sorted by distance (closest first)",
+        "parameters": {
+          "page": "Page number (1-based, default: 1)",
+          "pageSize": "Results per page (default: 10, max: 50)",
+          "maxDistance": "Filter by max distance in meters (optional)"
+        },
+        "returns": "Object with 'targets' array containing vessels with MMSI, position, distance",
+        "example": "const ais = await getAisTargets({ pageSize: 50, maxDistance: 5000 });\nconst nearby = ais.targets.filter(t => t.distanceMeters < 1852);"
+      },
+      "getActiveAlarms": {
+        "signature": "await getActiveAlarms()",
+        "description": "Get all system notifications and alerts (including resolved)",
+        "returns": "Object with 'alarms' array containing path, state, message, timestamp",
+        "alarm_states": ["normal", "alert", "warn", "alarm", "emergency"],
+        "example": "const alarms = await getActiveAlarms();\nconst critical = alarms.alarms.filter(a => a.state === 'alarm');"
+      },
+      "listAvailablePaths": {
+        "signature": "await listAvailablePaths()",
+        "description": "Discover all available SignalK data paths on the server",
+        "returns": "Object with 'paths' array of available path strings",
+        "example": "const result = await listAvailablePaths();\nconst navPaths = result.paths.filter(p => p.startsWith('navigation.'));"
+      },
+      "getPathValue": {
+        "signature": "await getPathValue(path)",
+        "description": "Get latest value for a specific SignalK path",
+        "parameters": {
+          "path": "SignalK path as string OR {path: string} object"
+        },
+        "returns": "Object with 'data' property containing value, timestamp, source",
+        "example": "const speed = await getPathValue('navigation.speedOverGround');\nconst heading = await getPathValue({ path: 'navigation.headingTrue' });"
+      },
+      "getConnectionStatus": {
+        "signature": "await getConnectionStatus()",
+        "description": "Get SignalK connection status and server configuration",
+        "note": "This function is also async - MUST use await",
+        "returns": "Object with connected, url, hostname, port, context, timestamp",
+        "example": "const status = await getConnectionStatus();\nconsole.log('Connected:', status.connected);"
+      }
+    }
+  },
+  "utility_tools": {
+    "description": "Available in all execution modes for debugging and documentation",
+    "tools": {
+      "get_connection_status": {
+        "purpose": "Check SignalK server connectivity (MCP tool, not SDK)",
+        "use_when": "Troubleshooting connection issues"
+      },
+      "get_initial_context": {
+        "purpose": "Get comprehensive SignalK documentation and context",
+        "use_when": "Starting a new session to understand available data"
+      }
     }
   },
   "usage_patterns": {
     "initial_discovery": [
-      "get_connection_status() - verify connectivity",
-      "list_available_paths() - understand capabilities", 
-      "get_vessel_state() - get complete picture"
+      "Use execute_code with getConnectionStatus() to verify connectivity",
+      "Use execute_code with listAvailablePaths() to understand capabilities",
+      "Use execute_code with getVesselState() filtered for overview"
     ],
     "ongoing_monitoring": [
-      "get_path_value() for specific updates",
-      "get_ais_targets() for traffic awareness",
-      "get_active_alarms() when needed"
+      "Use execute_code with getPathValue() for specific data points",
+      "Use execute_code with getAisTargets() for traffic awareness",
+      "Filter data in isolate before returning to save tokens"
     ],
     "troubleshooting": [
-      "get_connection_status() - check connectivity",
-      "get_active_alarms() - identify issues",
-      "get_path_value() for specific diagnostics"
+      "Use get_connection_status MCP tool for basic connectivity",
+      "Use execute_code with getActiveAlarms() filtered for critical only",
+      "Use execute_code with getPathValue() for specific diagnostics"
     ]
   },
   "efficiency_guidelines": {
-    "avoid_repetition": "Don't call get_vessel_state() multiple times in same conversation",
-    "cache_results": "Remember data from previous tool calls within conversation",
-    "targeted_queries": "Use get_path_value() for specific data instead of full state",
-    "batch_analysis": "Analyze multiple aspects from single get_vessel_state() call",
-    "path_categorization": "Group related paths when analyzing data"
+    "filter_in_isolate": "Always filter/transform data in the isolate before returning",
+    "combine_calls": "Make multiple SDK calls in a single execute_code invocation",
+    "return_minimal": "Only return the specific data needed, not entire objects",
+    "use_json_stringify": "Always return JSON.stringify() of your result"
+  },
+  "token_savings": {
+    "description": "Code execution provides massive token savings vs legacy tools",
+    "examples": {
+      "vessel_state": "2,000 tokens -> 120 tokens (94% savings)",
+      "ais_targets": "10,000 tokens -> 500 tokens (95% savings)",
+      "multi_call_workflow": "13,000 tokens -> 300 tokens (97% savings)"
+    }
   },
   "data_interpretation": {
     "units": "All SignalK values use SI units (meters, seconds, Kelvin, radians)",
     "timestamps": "All data includes RFC 3339 timestamps for freshness checking",
     "missing_data": "Paths may not exist if sensors/systems not installed",
-    "multiple_sources": "Same data may come from multiple devices",
     "null_values": "Null values indicate sensor offline or no valid reading"
+  },
+  "legacy_tools": {
+    "status": "DEPRECATED - Available only in 'tools' or 'hybrid' mode",
+    "note": "Use execute_code with SDK functions instead for 90-96% token savings",
+    "tools": [
+      "get_vessel_state -> Use await getVesselState()",
+      "get_ais_targets -> Use await getAisTargets()",
+      "get_active_alarms -> Use await getActiveAlarms()",
+      "list_available_paths -> Use await listAvailablePaths()",
+      "get_path_value -> Use await getPathValue()"
+    ]
   }
 }
