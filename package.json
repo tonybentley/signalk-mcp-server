@@ -1,6 +1,6 @@
 {
   "name": "signalk-mcp-server",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "MCP server for SignalK marine data integration",
   "main": "dist/src/index.js",
   "type": "module",
