@@ -264,7 +264,7 @@ describe('SignalKMCPServer', () => {
     });
 
     test('should return correct tools list', async () => {
-      new SignalKMCPServer();
+      new SignalKMCPServer({ executionMode: 'tools' });
 
       const listToolsHandler = mockServer.setRequestHandler.mock
         .calls[0][1] as () => any;
@@ -295,7 +295,7 @@ describe('SignalKMCPServer', () => {
     let callToolHandler: (request: any) => Promise<any>;
 
     beforeEach(() => {
-      new SignalKMCPServer();
+      new SignalKMCPServer({ executionMode: 'tools' });
       callToolHandler = mockServer.setRequestHandler.mock
         .calls[1][1] as (request: any) => Promise<any>;
     });
@@ -509,7 +509,7 @@ describe('SignalKMCPServer', () => {
     let server: SignalKMCPServer;
 
     beforeEach(() => {
-      server = new SignalKMCPServer();
+      server = new SignalKMCPServer({ executionMode: 'tools' });
     });
 
     test('getVesselState should return formatted response', async () => {

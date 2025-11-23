@@ -1,8 +1,8 @@
-const js = require('@eslint/js');
-const tsPlugin = require('@typescript-eslint/eslint-plugin');
-const tsParser = require('@typescript-eslint/parser');
+import js from '@eslint/js';
+import tsPlugin from '@typescript-eslint/eslint-plugin';
+import tsParser from '@typescript-eslint/parser';
 
-module.exports = [
+export default [
   // Base JavaScript recommended rules
   js.configs.recommended,
   
@@ -14,7 +14,7 @@ module.exports = [
       parserOptions: {
         ecmaVersion: 2020,
         sourceType: 'module',
-        project: './tsconfig.json'
+        project: './tsconfig.eslint.json'
       },
       globals: {
         console: 'readonly',
@@ -75,6 +75,17 @@ module.exports = [
       'prefer-const': 'error',
       'no-var': 'error',
       'no-undef': 'off' // TypeScript handles this
+    }
+  },
+  
+  // Overrides for test files
+  {
+    files: ['**/*.spec.ts', '**/*.e2e.spec.ts', 'tests/**/*.ts'],
+    rules: {
+      '@typescript-eslint/unbound-method': 'off',
+      '@typescript-eslint/require-await': 'off',
+      '@typescript-eslint/await-thenable': 'off',
+      'no-console': 'off'
     }
   },
   

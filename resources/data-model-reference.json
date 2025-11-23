@@ -10,7 +10,7 @@
       "Regional or specialty equipment paths",
       "Future specification additions"
     ],
-    "dynamic_discovery": "For complete path discovery, use the list_available_paths() MCP tool to query the actual SignalK server"
+    "dynamic_discovery": "For complete path discovery, use execute_code with: await listAvailablePaths()"
   },
   "vessel_structure": {
     "top_level_properties": {
