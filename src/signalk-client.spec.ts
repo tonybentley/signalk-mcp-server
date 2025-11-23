@@ -871,6 +871,7 @@ describe('SignalKClient', () => {
       expect(client.connected).toBe(true);
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/signalk/v1/api/vessels/self'),
+        {}, // buildFetchOptions() returns empty object when no token
       );
     });
 
