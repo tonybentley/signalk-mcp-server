@@ -5,7 +5,7 @@ All notable changes to the SignalK MCP Server project will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] - 2025-11-22
+## [1.0.6] - 2025-11-22
 
 ### 🚀 Major Release: Code Execution Engine
 
@@ -189,7 +189,7 @@ Or in Claude Desktop config:
 
 ### Upgrading
 
-**From 1.x to 2.0:**
+**From 1.0.x to 1.0.6:**
 1. AI agents should use `execute_code` tool instead of individual data-fetching tools
 2. Benefits: 90-96% token savings, faster responses, more flexibility
 3. For legacy compatibility, set `EXECUTION_MODE=tools`
@@ -230,5 +230,5 @@ Or in Claude Desktop config:
 
 ## Version History
 
-- **2.0.0** (2025-11-22): Code execution engine, Docker support, 90-96% token savings
+- **1.0.6** (2025-11-22): Code execution engine, Docker support, 90-96% token savings
 - **1.0.0** (2025-07-06): Initial release with legacy MCP tools

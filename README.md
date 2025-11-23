@@ -2,7 +2,7 @@
 
 A Model Context Protocol (MCP) server that provides AI agents with efficient access to SignalK marine data using **code execution in V8 isolates**. This approach reduces token usage by **90-96%** compared to traditional MCP tools.
 
-> **🚀 Version 2.0**: Now using code execution engine for massive token savings! See [CHANGELOG.md](CHANGELOG.md) for details.
+> **🚀 Version 1.0.6**: Now using code execution engine for massive token savings! See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ## Why Code Execution?
 
@@ -121,7 +121,7 @@ EXECUTION_MODE=code            # code (default) | tools (legacy) | hybrid
 
 # Optional Settings
 SERVER_NAME=signalk-mcp-server
-SERVER_VERSION=2.0.0
+SERVER_VERSION=1.0.6
 ```
 
 ### Execution Modes
@@ -311,7 +311,7 @@ SignalK Server
 
 ### Breaking Changes
 
-Version 2.0 changes the default mode from `hybrid` to `code`. Legacy tools are no longer available by default.
+Version 1.0.6 changes the default mode from `hybrid` to `code`. Legacy tools are no longer available by default.
 
 ### Backward Compatibility
 

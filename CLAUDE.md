@@ -54,7 +54,7 @@ EXECUTION_MODE=code                          # code (default) | tools | hybrid
 
 ### MCP Server Settings
 SERVER_NAME=signalk-mcp-server               # MCP server identifier
-SERVER_VERSION=2.0.0                         # Version string
+SERVER_VERSION=1.0.6                         # Version string
 DEBUG=false                                  # Enable debug logging
 LOG_LEVEL=info                               # Logging level
 
