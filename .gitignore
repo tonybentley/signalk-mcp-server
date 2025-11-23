@@ -135,7 +135,3 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
-# Personal notes and temporary files
-__*.md
-nul
-.claude/
