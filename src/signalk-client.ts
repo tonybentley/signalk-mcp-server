@@ -26,12 +26,16 @@ export class SignalKClient extends EventEmitter {
   public aisTargets: Map<string, AISTarget>;
   public activeAlarms: Map<string, ActiveAlarm>;
   private client: any;
+  private token?: string;
 
   constructor(options: SignalKClientOptions = {}) {
     super();
 
     // Set SignalK connection configuration directly from environment variables
     this.setSignalKConfig(options);
+
+    // Store authentication token for HTTP requests
+    this.token = options.token || process.env.SIGNALK_TOKEN;
 
     // WEBSOCKET CLIENT PRESERVED FOR FUTURE STREAMING SUPPORT
     // When MCP servers support streaming, this WebSocket client will enable
@@ -44,7 +48,7 @@ export class SignalKClient extends EventEmitter {
       reconnect: true,
       autoConnect: false,  // WebSocket connection disabled for HTTP-only mode
       notifications: true,
-      token: options.token || process.env.SIGNALK_TOKEN,
+      token: this.token,
       subscribe: 'all',
       useHttp: false,
       subscriptions: [
@@ -139,6 +143,20 @@ export class SignalKClient extends EventEmitter {
   }
 
   /**
+   * Build fetch options with authentication headers if token is configured
+   * @returns RequestInit object with authorization header if token exists
+   */
+  private buildFetchOptions(): RequestInit {
+    const options: RequestInit = {};
+    if (this.token) {
+      options.headers = {
+        'Authorization': `Bearer ${this.token}`,
+      };
+    }
+    return options;
+  }
+
+  /**
    * Sets up WebSocket event handlers for connection, disconnection, errors, and delta messages
    *
    * Event handlers:
@@ -202,7 +220,7 @@ export class SignalKClient extends EventEmitter {
     // Test HTTP connectivity
     try {
       const apiUrl = this.buildRestApiUrl('self');
-      const response = await fetch(apiUrl);
+      const response = await fetch(apiUrl, this.buildFetchOptions());
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -268,7 +286,7 @@ export class SignalKClient extends EventEmitter {
   private async fetchInitialVesselState(): Promise<void> {
     try {
       const apiUrl = this.buildRestApiUrl('self');
-      const response = await fetch(apiUrl);
+      const response = await fetch(apiUrl, this.buildFetchOptions());
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -574,8 +592,8 @@ export class SignalKClient extends EventEmitter {
   async getVesselState(): Promise<VesselState> {
     try {
       const apiUrl = this.buildRestApiUrl('self');
-      const response = await fetch(apiUrl);
-      
+      const response = await fetch(apiUrl, this.buildFetchOptions());
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -787,8 +805,8 @@ export class SignalKClient extends EventEmitter {
 
       // Fetch all vessels from the API
       const apiUrl = `${this.buildHttpUrl()}/signalk/v1/api/vessels`;
-      const response = await fetch(apiUrl);
-      
+      const response = await fetch(apiUrl, this.buildFetchOptions());
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -982,8 +1000,8 @@ export class SignalKClient extends EventEmitter {
   async getActiveAlarms(): Promise<ActiveAlarmsResponse> {
     try {
       const apiUrl = this.buildRestApiUrl('self');
-      const response = await fetch(apiUrl);
-      
+      const response = await fetch(apiUrl, this.buildFetchOptions());
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -1081,7 +1099,7 @@ export class SignalKClient extends EventEmitter {
       // Use helper method to build REST API URL
       const apiUrl = this.buildRestApiUrl('self');
 
-      const response = await fetch(apiUrl);
+      const response = await fetch(apiUrl, this.buildFetchOptions());
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -1184,7 +1202,7 @@ export class SignalKClient extends EventEmitter {
       // Use helper method to build REST API URL for the specific path
       const apiUrl = this.buildRestApiUrl('self', path);
 
-      const response = await fetch(apiUrl);
+      const response = await fetch(apiUrl, this.buildFetchOptions());
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
