@@ -5,6 +5,29 @@ All notable changes to the SignalK MCP Server project will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.8] - 2025-11-26
+
+### Fixed
+- Fixed token authentication for remote SignalK servers (#5) - Thanks @dirkwa!
+  - Corrected token header format from `Authorization: JWT <token>` to `Authorization: Bearer <token>`
+  - Enables connection to SignalK servers requiring authentication
+  - Tested with remote servers accessed via HTTP
+
+### Added
+- Automated npm publishing workflow with OIDC
+  - Publishes to npm automatically on tag push
+  - Includes provenance attestation for package security
+  - Auto-extracts release notes from CHANGELOG.md
+  - Creates GitHub releases automatically
+- Fixed Claude Code review workflow for forked PRs
+  - Now works with pull requests from external contributors
+  - Uses `pull_request_target` for proper secret access
+
+### Changed
+- Merged PR #5 from @dirkwa with token authentication improvements
+
+---
+
 ## [1.0.6] - 2025-11-22
 
 ### 🚀 Major Release: Code Execution Engine
