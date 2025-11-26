@@ -21,6 +21,7 @@
     "test": "npm run test:unit",
     "test:unit": "jest --testPathPatterns=\\.spec\\.ts$ --testPathIgnorePatterns=\\.e2e\\.",
     "test:e2e": "jest --testPathPatterns=\\.e2e\\.spec\\.ts$",
+    "test:e2e:docker": "./scripts/run-e2e-tests.sh",
     "test:all": "jest",
     "test:watch": "jest --watch --testPathPatterns=\\.spec\\.ts$ --testPathIgnorePatterns=\\.e2e\\.",
     "test:watch:unit": "jest --watch --testPathPatterns=\\.spec\\.ts$ --testPathIgnorePatterns=\\.e2e\\.",

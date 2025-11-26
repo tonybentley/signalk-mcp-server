@@ -134,3 +134,10 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Docker test data
+docker/signalk-config/*
+!docker/signalk-config/settings.json
+
+# Test results
+test-results/

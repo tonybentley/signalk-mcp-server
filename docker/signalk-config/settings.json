@@ -1,0 +1,44 @@
+{
+  "vessel": {
+    "name": "Test Vessel",
+    "mmsi": "123456789",
+    "uuid": "urn:mrn:signalk:uuid:test-vessel-001"
+  },
+  "settings": {
+    "interfaces": {
+      "appstore": true,
+      "webapps": true,
+      "plugins": true,
+      "admin": true,
+      "rest": true,
+      "ws": true,
+      "tcp": true,
+      "nmea-tcp": true
+    },
+    "port": 3000,
+    "sslport": 3443,
+    "pruneContextsMinutes": 60,
+    "mdns": false,
+    "ssl": false,
+    "wsCompression": false
+  },
+  "pipedProviders": [
+    {
+      "id": "sample-nmea",
+      "pipeElements": [
+        {
+          "type": "providers/simple",
+          "options": {
+            "logging": false,
+            "type": "NMEA0183",
+            "subOptions": {
+              "validateChecksum": true,
+              "ignoredSentences": []
+            }
+          }
+        }
+      ],
+      "enabled": true
+    }
+  ]
+}
