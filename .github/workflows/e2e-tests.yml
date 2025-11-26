@@ -1,0 +1,74 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [20.x]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Build project
+      run: npm run build
+    
+    - name: Start SignalK server container
+      run: |
+        docker compose -f docker/docker-compose.test.yml up -d
+        echo "Waiting for SignalK server to be healthy..."
+        timeout 60s bash -c 'until docker compose -f docker/docker-compose.test.yml ps | grep -q "healthy"; do sleep 2; done'
+        echo "SignalK server is ready!"
+    
+    - name: Verify SignalK server is running
+      run: |
+        curl -f http://localhost:3000/signalk/v1/api/ || exit 1
+        echo "SignalK server API is accessible"
+    
+    - name: Run E2E tests
+      run: npm run test:e2e
+      env:
+        SIGNALK_HOST: localhost
+        SIGNALK_PORT: 3000
+        SIGNALK_TLS: false
+        SIGNALK_CONTEXT: vessels.self
+    
+    - name: Show container logs on failure
+      if: failure()
+      run: |
+        echo "=== Docker Compose Status ==="
+        docker compose -f docker/docker-compose.test.yml ps
+        echo "=== SignalK Server Logs ==="
+        docker compose -f docker/docker-compose.test.yml logs signalk-server
+    
+    - name: Stop containers
+      if: always()
+      run: docker compose -f docker/docker-compose.test.yml down -v
+    
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: e2e-test-results
+        path: |
+          test-results/
+          coverage/
+        retention-days: 7
