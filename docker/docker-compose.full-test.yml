@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  signalk-server:
+    image: cr.signalk.io/signalk/signalk-server:latest
+    container_name: signalk-test-server
+    restart: unless-stopped
+    ports:
+      - "3000:3000"     # HTTP/WebSocket
+      - "10110:10110"   # NMEA 0183 TCP
+      - "8375:8375"     # SignalK TCP Stream
+    environment:
+      - PORT=3000
+      - NMEA0183PORT=10110
+      - TCPSTREAMPORT=8375
+      - WSCOMPRESSION=false
+      - DISABLEPLUGINS=true  # Disable plugins for predictable test environment
+    volumes:
+      - ./signalk-config:/home/node/.signalk
+    # Start with both NMEA0183 and N2K sample data for comprehensive testing
+    command: ["--sample-nmea0183-data", "--sample-n2k-data", "--override-timestamps"]
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/signalk/v1/api/"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
